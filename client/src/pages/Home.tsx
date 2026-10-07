@@ -20,6 +20,7 @@ import {
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import VinMatcher from "@/components/VinMatcher";
 
 type Product = {
   id: number;
@@ -142,6 +143,8 @@ export default function Home() {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center"><div className="flex items-center gap-3 lg:w-1/4"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-50 text-[#f97316]"><CarFront size={22} /></span><div><p className="font-extrabold">ابحث حسب سيارتك</p><p className="text-xs text-slate-500">قطع مطابقة بدون تخمين</p></div></div><div className="grid flex-1 gap-3 sm:grid-cols-3"><SelectBox label="الماركة" value={car} options={carOptions} onChange={setCar} /><SelectBox label="الموديل" value="اختر الموديل" options={["اختر الموديل", "2020", "2021", "2022", "2023"]} onChange={() => {}} /><SelectBox label="الفئة" value={category} options={categoryOptions} onChange={setCategory} /></div><Button className="h-11 rounded-xl bg-[#0b1f33] px-5 font-bold text-white hover:bg-[#173b5d]" onClick={() => document.getElementById("shop")?.scrollIntoView({ behavior: "smooth" })}>اعرض القطع <ArrowLeft size={17} /></Button></div>
           </div>
         </section>
+
+        <VinMatcher onVehicleMatch={(make) => setCar(make)} />
 
         <section className="mx-auto max-w-7xl px-4 pb-4 pt-12 lg:px-8" id="categories"><div className="mb-5 flex items-end justify-between"><div><p className="text-sm font-bold text-[#f97316]">تسوّق بذكاء</p><h2 className="mt-1 text-2xl font-black sm:text-3xl">كل ما تحتاجه في مكان واحد</h2></div><a href="#shop" className="hidden items-center gap-1 text-sm font-bold text-slate-500 hover:text-[#f97316] sm:flex">عرض كل الفئات <ArrowLeft size={16} /></a></div><div className="grid grid-cols-2 gap-3 md:grid-cols-5">{categories.map((item) => <button key={item.label} onClick={() => setCategory(item.label)} className="group rounded-2xl border border-slate-200 bg-white p-4 text-right transition hover:-translate-y-1 hover:border-orange-200 hover:shadow-lg hover:shadow-orange-100/50"><span className={`flex h-11 w-11 items-center justify-center rounded-xl text-xl font-black ${item.tone}`}>{item.icon}</span><p className="mt-4 font-extrabold">{item.label}</p><p className="mt-1 text-xs text-slate-400">{item.count}</p></button>)}</div></section>
 

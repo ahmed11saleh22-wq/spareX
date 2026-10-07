@@ -16,6 +16,20 @@ async function startServer() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
+  app.get("/api/vin/lookup", (req, res) => {
+    const vin = String(req.query.vin ?? "").toUpperCase().replace(/[\s-]/g, "");
+    if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(vin)) {
+      return res.status(400).json({ success: false, message: "رقم الهيكل يجب أن يتكون من 17 خانة صالحة." });
+    }
+    const vehicle = vin.startsWith("JTD")
+      ? { make: "تويوتا", model: "كامري", years: "2018–2023", engine: "2.5L", note: "تم تحديد عائلة كامري. تظهر القطع المتوافقة مع هذا الطراز أولًا." }
+      : vin.startsWith("WBA")
+        ? { make: "BMW", model: "3 Series", years: "2016–2021", engine: "2.0L", note: "تم تحديد عائلة BMW 3 Series. راجع سنة الصنع قبل اعتماد الطلب." }
+        : vin.startsWith("KMH")
+          ? { make: "هيونداي", model: "سوناتا", years: "2020–2024", engine: "2.5L", note: "تم تحديد عائلة سوناتا. تم تفعيل ترشيحات القطع الكورية المناسبة." }
+          : { make: "سيارة أوروبية/آسيوية", model: "مطابقة أولية", years: "حسب السجل", engine: "غير محدد", note: "تم قبول الرقم. سيحتاج فريق التوافق إلى مراجعة إضافية قبل الشحن." };
+    return res.json({ success: true, vehicle });
+  });
   app.get("/api/platform/config.js", (_req, res) => {
     res.set("Cache-Control", "no-store").type("application/javascript").send(publicPlatformScript());
   });
