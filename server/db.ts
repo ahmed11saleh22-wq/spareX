@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertProduct, InsertUser, orderItems, orders, products, users } from "../drizzle/schema";
+import { InsertProduct, InsertUser, orderItems, orders, products, shipmentEvents, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -114,8 +114,39 @@ export async function listAdminOrders() {
 
 export async function updateOrderStatus(orderNumber: string, status: keyof typeof orderStatusToArabic) {
   const db = await requireDb();
-  await db.update(orders).set({ status, updatedAt: new Date() }).where(eq(orders.orderNumber, orderNumber));
+  const shippingByOrderStatus = { new: "pending", processing: "preparing", shipped: "shipped", completed: "delivered", cancelled: "exception" } as const;
+  const shippingStatus = shippingByOrderStatus[status];
+  const now = new Date();
+  const found = await db.select({ id: orders.id }).from(orders).where(eq(orders.orderNumber, orderNumber)).limit(1);
+  const orderId = found[0]?.id;
+  if (!orderId) throw new Error("الطلب غير موجود");
+  await db.update(orders).set({ status, shippingStatus, shippingUpdatedAt: now, updatedAt: now }).where(eq(orders.id, orderId));
+  await db.insert(shipmentEvents).values({ orderId, status: shippingStatus, title: shippingStatusLabels[shippingStatus], description: "تم تحديث حالة الطلب من لوحة الإدارة.", occurredAt: now });
   return { success: true };
+}
+
+const shippingStatusLabels = { pending: "تم استلام الطلب", preparing: "جاري تجهيز الطلب", shipped: "تم تسليم الشحنة للناقل", in_transit: "الشحنة في الطريق", out_for_delivery: "خرجت للتوصيل", delivered: "تم التسليم", exception: "تحتاج الشحنة إلى متابعة" } as const;
+
+export async function updateShipment(input: { orderNumber: string; shippingStatus: keyof typeof shippingStatusLabels; carrier?: string; trackingNumber?: string; estimatedDelivery?: string; title: string; description?: string; location?: string }) {
+  const db = await requireDb();
+  const found = await db.select({ id: orders.id }).from(orders).where(eq(orders.orderNumber, input.orderNumber)).limit(1);
+  const orderId = found[0]?.id;
+  if (!orderId) throw new Error("الطلب غير موجود");
+  const now = new Date();
+  await db.update(orders).set({ shippingStatus: input.shippingStatus, carrier: input.carrier || null, trackingNumber: input.trackingNumber || null, estimatedDelivery: input.estimatedDelivery || null, shippingUpdatedAt: now, updatedAt: now }).where(eq(orders.id, orderId));
+  await db.insert(shipmentEvents).values({ orderId, status: input.shippingStatus, title: input.title || shippingStatusLabels[input.shippingStatus], description: input.description || null, location: input.location || null, occurredAt: now });
+  return { success: true };
+}
+
+export async function trackOrder(orderNumber: string, phone: string) {
+  const db = await requireDb();
+  const found = await db.select().from(orders).where(eq(orders.orderNumber, orderNumber.trim())).limit(1);
+  const order = found[0];
+  const requestedDigits = phone.replace(/\D/g, "");
+  const storedDigits = order?.phone.replace(/\D/g, "") ?? "";
+  if (!order || requestedDigits.slice(-4) !== storedDigits.slice(-4)) throw new Error("تعذر العثور على الطلب. تحقق من رقم الطلب وآخر 4 أرقام من الجوال.");
+  const events = await db.select().from(shipmentEvents).where(eq(shipmentEvents.orderId, order.id)).orderBy(desc(shipmentEvents.occurredAt));
+  return { orderNumber: order.orderNumber, status: order.status, shippingStatus: order.shippingStatus, shippingStatusLabel: shippingStatusLabels[order.shippingStatus], carrier: order.carrier, trackingNumber: order.trackingNumber, estimatedDelivery: order.estimatedDelivery, updatedAt: order.shippingUpdatedAt ?? order.updatedAt, events };
 }
 
 export async function getAdminOverview() {
@@ -143,10 +174,11 @@ export async function createCustomerOrder(input: { userId: number | null; custom
     const subtotal = lineItems.reduce((sum, line) => sum + line.product.price * line.quantity, 0);
     const shippingCost = subtotal >= 250 ? 0 : 25;
     const orderNumber = `QH-${Date.now().toString().slice(-8)}`;
-    await tx.insert(orders).values({ orderNumber, userId: input.userId, customerName: input.customerName, phone: input.phone, shippingAddress: input.shippingAddress, subtotal, shippingCost, total: subtotal + shippingCost, status: "new" });
+    await tx.insert(orders).values({ orderNumber, userId: input.userId, customerName: input.customerName, phone: input.phone, shippingAddress: input.shippingAddress, subtotal, shippingCost, total: subtotal + shippingCost, status: "new", shippingStatus: "pending", shippingUpdatedAt: new Date() });
     const created = await tx.select({ id: orders.id }).from(orders).where(eq(orders.orderNumber, orderNumber)).limit(1);
     const orderId = created[0]?.id;
     if (!orderId) throw new Error("تعذر إنشاء الطلب");
+    await tx.insert(shipmentEvents).values({ orderId, status: "pending", title: "تم استلام الطلب", description: "تم تسجيل طلبك وسيبدأ الفريق بتجهيزه.", occurredAt: new Date() });
     await tx.insert(orderItems).values(lineItems.map((line) => ({ orderId, productId: line.product.id, productName: line.product.name, quantity: line.quantity, unitPrice: line.product.price })));
     for (const line of lineItems) await tx.update(products).set({ stockQuantity: sql`${products.stockQuantity} - ${line.quantity}`, updatedAt: new Date() }).where(eq(products.id, line.product.id));
     return { orderNumber, total: subtotal + shippingCost };

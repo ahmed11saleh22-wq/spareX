@@ -4,6 +4,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, publicProcedure, router } from "./_core/trpc";
 import * as db from "./db";
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -31,6 +32,7 @@ export const appRouter = router({
       shippingAddress: z.string().min(8).max(1000),
       items: z.array(z.object({ productId: z.number().int().positive(), quantity: z.number().int().positive().max(20) })).min(1),
     })).mutation(({ input, ctx }) => db.createCustomerOrder({ ...input, userId: ctx.user?.id ?? null })),
+    track: publicProcedure.input(z.object({ orderNumber: z.string().min(3).max(40), phone: z.string().min(4).max(40) })).mutation(async ({ input }) => { try { return await db.trackOrder(input.orderNumber, input.phone); } catch { throw new TRPCError({ code: "NOT_FOUND", message: "تعذر العثور على الطلب. تحقق من رقم الطلب وآخر 4 أرقام من الجوال." }); } }),
   }),
 
   admin: router({
@@ -53,6 +55,7 @@ export const appRouter = router({
     archiveProduct: adminProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ input }) => db.archiveProduct(input.id)),
     listOrders: adminProcedure.query(() => db.listAdminOrders()),
     updateOrderStatus: adminProcedure.input(z.object({ orderNumber: z.string().min(1), status: z.enum(["new", "processing", "shipped", "completed", "cancelled"]) })).mutation(({ input }) => db.updateOrderStatus(input.orderNumber, input.status)),
+    updateShipment: adminProcedure.input(z.object({ orderNumber: z.string().min(1), shippingStatus: z.enum(["pending", "preparing", "shipped", "in_transit", "out_for_delivery", "delivered", "exception"]), carrier: z.string().max(80).optional(), trackingNumber: z.string().max(120).optional(), estimatedDelivery: z.string().max(120).optional(), title: z.string().min(2).max(180), description: z.string().max(500).optional(), location: z.string().max(180).optional() })).mutation(({ input }) => db.updateShipment(input)),
   }),
 
   // TODO: add feature routers here, e.g.

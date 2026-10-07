@@ -53,6 +53,11 @@ export const orders = mysqlTable("orders", {
   shippingCost: int("shippingCost").default(0).notNull(),
   total: int("total").notNull(),
   status: mysqlEnum("status", ["new", "processing", "shipped", "completed", "cancelled"]).default("new").notNull(),
+  shippingStatus: mysqlEnum("shippingStatus", ["pending", "preparing", "shipped", "in_transit", "out_for_delivery", "delivered", "exception"]).default("pending").notNull(),
+  trackingNumber: varchar("trackingNumber", { length: 120 }),
+  carrier: varchar("carrier", { length: 80 }),
+  estimatedDelivery: varchar("estimatedDelivery", { length: 120 }),
+  shippingUpdatedAt: timestamp("shippingUpdatedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -66,6 +71,16 @@ export const orderItems = mysqlTable("order_items", {
   unitPrice: int("unitPrice").notNull(),
 });
 
+export const shipmentEvents = mysqlTable("shipment_events", {
+  id: int("id").autoincrement().primaryKey(),
+  orderId: int("orderId").notNull(),
+  status: mysqlEnum("status", ["pending", "preparing", "shipped", "in_transit", "out_for_delivery", "delivered", "exception"]).notNull(),
+  title: varchar("title", { length: 180 }).notNull(),
+  description: text("description"),
+  location: varchar("location", { length: 180 }),
+  occurredAt: timestamp("occurredAt").defaultNow().notNull(),
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Product = typeof products.$inferSelect;
@@ -74,3 +89,5 @@ export type Order = typeof orders.$inferSelect;
 export type InsertOrder = typeof orders.$inferInsert;
 export type OrderItem = typeof orderItems.$inferSelect;
 export type InsertOrderItem = typeof orderItems.$inferInsert;
+export type ShipmentEvent = typeof shipmentEvents.$inferSelect;
+export type InsertShipmentEvent = typeof shipmentEvents.$inferInsert;

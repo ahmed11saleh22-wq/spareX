@@ -15,6 +15,13 @@
       "when": 1791360866178,
       "tag": "0001_sparkling_zaladane",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1791362175626,
+      "tag": "0002_late_changeling",
+      "breakpoints": true
     }
   ]
 }
