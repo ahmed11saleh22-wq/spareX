@@ -91,6 +91,12 @@ export async function archiveProduct(id: number) {
   return { success: true };
 }
 
+export async function updateProduct(id: number, input: { name: string; brand: string; category: string; price: number; stockQuantity: number }) {
+  const db = await requireDb();
+  await db.update(products).set({ ...input, updatedAt: new Date() }).where(eq(products.id, id));
+  return { success: true };
+}
+
 const orderStatusToArabic = { new: "جديد", processing: "قيد التجهيز", shipped: "تم الشحن", completed: "مكتمل", cancelled: "ملغى" } as const;
 
 export async function listAdminOrders() {

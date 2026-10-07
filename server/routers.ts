@@ -49,6 +49,7 @@ export const appRouter = router({
       badge: z.string().max(80).optional(),
       rating: z.number().int().min(0).max(50).default(0),
     })).mutation(({ input }) => db.createProduct({ ...input, status: "active", description: null })),
+    updateProduct: adminProcedure.input(z.object({ id: z.number().int().positive(), name: z.string().min(2).max(255), brand: z.string().min(1).max(120), category: z.string().min(1).max(120), price: z.number().int().nonnegative(), stockQuantity: z.number().int().nonnegative() })).mutation(({ input }) => db.updateProduct(input.id, input)),
     archiveProduct: adminProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ input }) => db.archiveProduct(input.id)),
     listOrders: adminProcedure.query(() => db.listAdminOrders()),
     updateOrderStatus: adminProcedure.input(z.object({ orderNumber: z.string().min(1), status: z.enum(["new", "processing", "shipped", "completed", "cancelled"]) })).mutation(({ input }) => db.updateOrderStatus(input.orderNumber, input.status)),
