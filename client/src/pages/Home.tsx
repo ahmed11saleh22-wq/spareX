@@ -20,6 +20,7 @@ import {
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { trpc } from "@/lib/trpc";
 import VinMatcher from "@/components/VinMatcher";
 
 type Product = {
@@ -44,12 +45,6 @@ const categories = [
   { label: "زيوت وسوائل", count: "320 قطعة", icon: "◌", tone: "bg-emerald-50 text-emerald-700" },
 ];
 
-const products: Product[] = [
-  { id: 1, name: "طقم فحمات فرامل أمامية", brand: "Brembo", car: "تويوتا كامري 2018–2023", category: "فرامل", price: 179, oldPrice: 229, image: "/assets/brake-kit.jpeg", badge: "الأكثر طلبًا", rating: 4.9, stock: "متوفر الآن" },
-  { id: 2, name: "هوبات فرامل رياضية — زوج", brand: "ATE", car: "BMW 3 Series 2016–2021", category: "فرامل", price: 385, image: "/assets/brake-rotor.jpeg", badge: "أصلي", rating: 4.8, stock: "باقي 4 قطع" },
-  { id: 3, name: "طقم فرامل سيراميك كامل", brand: "TRW", car: "هيونداي سوناتا 2020–2024", category: "فرامل", price: 299, oldPrice: 349, image: "/assets/brake-box.jpeg", badge: "عرض اليوم", rating: 4.7, stock: "متوفر الآن" },
-  { id: 4, name: "فلتر هواء عالي الأداء", brand: "MANN-FILTER", car: "مرسيدس C-Class 2017–2022", category: "فلاتر", price: 89, image: "/assets/parts-hero.jpg", rating: 4.6, stock: "متوفر الآن" },
-];
 
 const carOptions = ["اختر الماركة", "تويوتا", "هيونداي", "BMW", "مرسيدس", "نيسان"];
 const categoryOptions = ["كل الفئات", "فرامل", "فلاتر", "تعليق ومقصات", "كهرباء السيارة", "زيوت وسوائل"];
@@ -64,6 +59,25 @@ export default function Home() {
   const [mobileMenu, setMobileMenu] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [checkoutForm, setCheckoutForm] = useState({ customerName: "", phone: "", shippingAddress: "" });
+  const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
+  const createOrderMutation = trpc.orders.create.useMutation({ onSuccess: (result) => { setOrderSuccess(result.orderNumber); setCheckoutOpen(false); setCartOpen(false); setCart([]); setCheckoutForm({ customerName: "", phone: "", shippingAddress: "" }); } });
+  const { data: catalogRows = [] } = trpc.catalog.list.useQuery();
+  const { data: categoryRows = [] } = trpc.catalog.categories.useQuery();
+  const categoryCards = categories.map((item) => ({ ...item, count: `${Number(categoryRows.find((row) => row.category === item.label)?.count ?? 0)} قطعة` }));
+  const products: Product[] = catalogRows.map((product) => ({
+    id: product.id,
+    name: product.name,
+    brand: product.brand,
+    car: product.car,
+    category: product.category,
+    price: product.price,
+    oldPrice: product.oldPrice ?? undefined,
+    image: product.imageUrl,
+    badge: product.badge ?? undefined,
+    rating: product.rating / 10,
+    stock: product.stockQuantity > 0 ? (product.stockQuantity < 5 ? `باقي ${product.stockQuantity} قطع` : "متوفر الآن") : "غير متوفر",
+  }));
 
   const filteredProducts = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -76,7 +90,7 @@ export default function Home() {
     if (sort === "السعر: الأقل") return [...result].sort((a, b) => a.price - b.price);
     if (sort === "السعر: الأعلى") return [...result].sort((a, b) => b.price - a.price);
     return result;
-  }, [query, category, car, sort]);
+  }, [products, query, category, car, sort]);
 
   const cartCount = cart.length;
   const cartProducts = products.filter((product) => cart.includes(product.id));
@@ -146,7 +160,7 @@ export default function Home() {
 
         <VinMatcher onVehicleMatch={(make) => setCar(make)} />
 
-        <section className="mx-auto max-w-7xl px-4 pb-4 pt-12 lg:px-8" id="categories"><div className="mb-5 flex items-end justify-between"><div><p className="text-sm font-bold text-[#f97316]">تسوّق بذكاء</p><h2 className="mt-1 text-2xl font-black sm:text-3xl">كل ما تحتاجه في مكان واحد</h2></div><a href="#shop" className="hidden items-center gap-1 text-sm font-bold text-slate-500 hover:text-[#f97316] sm:flex">عرض كل الفئات <ArrowLeft size={16} /></a></div><div className="grid grid-cols-2 gap-3 md:grid-cols-5">{categories.map((item) => <button key={item.label} onClick={() => setCategory(item.label)} className="group rounded-2xl border border-slate-200 bg-white p-4 text-right transition hover:-translate-y-1 hover:border-orange-200 hover:shadow-lg hover:shadow-orange-100/50"><span className={`flex h-11 w-11 items-center justify-center rounded-xl text-xl font-black ${item.tone}`}>{item.icon}</span><p className="mt-4 font-extrabold">{item.label}</p><p className="mt-1 text-xs text-slate-400">{item.count}</p></button>)}</div></section>
+        <section className="mx-auto max-w-7xl px-4 pb-4 pt-12 lg:px-8" id="categories"><div className="mb-5 flex items-end justify-between"><div><p className="text-sm font-bold text-[#f97316]">تسوّق بذكاء</p><h2 className="mt-1 text-2xl font-black sm:text-3xl">كل ما تحتاجه في مكان واحد</h2></div><a href="#shop" className="hidden items-center gap-1 text-sm font-bold text-slate-500 hover:text-[#f97316] sm:flex">عرض كل الفئات <ArrowLeft size={16} /></a></div><div className="grid grid-cols-2 gap-3 md:grid-cols-5">{categoryCards.map((item) => <button key={item.label} onClick={() => setCategory(item.label)} className="group rounded-2xl border border-slate-200 bg-white p-4 text-right transition hover:-translate-y-1 hover:border-orange-200 hover:shadow-lg hover:shadow-orange-100/50"><span className={`flex h-11 w-11 items-center justify-center rounded-xl text-xl font-black ${item.tone}`}>{item.icon}</span><p className="mt-4 font-extrabold">{item.label}</p><p className="mt-1 text-xs text-slate-400">{item.count}</p></button>)}</div></section>
 
         <section className="mx-auto max-w-7xl px-4 pb-20 pt-12 lg:px-8" id="shop"><div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-sm font-bold text-[#f97316]">اختيارات قطعها</p><h2 className="mt-1 text-2xl font-black sm:text-3xl">قطع تستاهلها سيارتك</h2></div><div className="flex items-center gap-2"><button className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 sm:hidden"><Filter size={16} /> تصفية</button><label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500"><SlidersHorizontal size={16} /><select className="bg-transparent font-bold outline-none" value={sort} onChange={(e) => setSort(e.target.value)}><option>الأكثر صلة</option><option>السعر: الأقل</option><option>السعر: الأعلى</option></select></label></div></div><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{filteredProducts.map((product) => <ProductCard key={product.id} product={product} onAdd={addToCart} onDetails={setSelectedProduct} />)}</div>{filteredProducts.length === 0 && <div className="rounded-2xl border border-dashed border-slate-300 bg-white py-16 text-center"><Search className="mx-auto text-slate-300" size={32} /><p className="mt-3 font-bold">ما لقينا قطع مطابقة</p><p className="mt-1 text-sm text-slate-500">جرّب كلمة بحث ثانية أو غيّر الفئة.</p></div>}</section>
 
@@ -159,7 +173,9 @@ export default function Home() {
 
       {selectedProduct && <div className="fixed inset-0 z-[60] flex items-center justify-center p-4"><button className="absolute inset-0 bg-[#0b1f33]/55" onClick={() => setSelectedProduct(null)} aria-label="إغلاق تفاصيل القطعة" /><div className="relative max-h-[90vh] w-full max-w-2xl overflow-auto rounded-3xl bg-white p-5 shadow-2xl sm:p-7"><button className="absolute left-4 top-4 rounded-xl bg-white p-2 text-slate-500 shadow-sm" onClick={() => setSelectedProduct(null)} aria-label="إغلاق"><X size={19} /></button><div className="grid gap-6 sm:grid-cols-2"><div className="overflow-hidden rounded-2xl bg-slate-50"><img src={selectedProduct.image} alt={selectedProduct.name} className="h-full min-h-64 w-full object-cover mix-blend-multiply" /></div><div className="pt-3"><span className="text-sm font-bold text-[#f97316]">{selectedProduct.brand} · قطعة أصلية</span><h2 className="mt-2 text-2xl font-black leading-tight">{selectedProduct.name}</h2><p className="mt-3 text-sm leading-7 text-slate-600">قطعة مختارة بجودة موثوقة، مناسبة للاستخدام اليومي ومراجعة التوافق قبل الشحن.</p><div className="mt-4 rounded-xl bg-emerald-50 p-3 text-sm font-bold text-emerald-700"><BadgeCheck className="ml-1 inline" size={16} /> متوافق مع {selectedProduct.car}</div><div className="mt-5 flex items-end justify-between"><div><span className="text-3xl font-black">{selectedProduct.price}</span> <span className="font-bold">ر.س</span><p className="mt-1 text-xs font-bold text-emerald-600">● {selectedProduct.stock}</p></div><Button className="rounded-xl bg-[#f97316] font-bold text-white hover:bg-[#ea580c]" onClick={() => { addToCart(selectedProduct.id); setSelectedProduct(null); }}>أضف للسلة <ShoppingCart size={17} /></Button></div></div></div></div></div>}
 
-      {checkoutOpen && <div className="fixed inset-0 z-[70] flex items-center justify-center p-4"><button className="absolute inset-0 bg-[#0b1f33]/55" onClick={() => setCheckoutOpen(false)} aria-label="إغلاق الطلب" /><div className="relative max-h-[92vh] w-full max-w-3xl overflow-auto rounded-3xl bg-white p-5 shadow-2xl sm:p-7"><button className="absolute left-4 top-4 rounded-xl p-2 text-slate-500 hover:bg-slate-100" onClick={() => setCheckoutOpen(false)} aria-label="إغلاق"><X size={19} /></button><div className="mb-6"><p className="text-sm font-bold text-[#f97316]">الخطوة الأخيرة</p><h2 className="mt-1 text-2xl font-black">بيانات الشحن وملخص الطلب</h2></div><div className="grid gap-6 md:grid-cols-[1.2fr_.8fr]"><div className="space-y-4"><input className="h-12 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none focus:border-orange-300" placeholder="الاسم الكامل" /><input className="h-12 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none focus:border-orange-300" placeholder="رقم الجوال" /><textarea className="min-h-28 w-full rounded-xl border border-slate-200 p-4 text-sm outline-none focus:border-orange-300" placeholder="عنوان التوصيل بالتفصيل" /><div className="flex items-center gap-2 rounded-xl bg-slate-50 p-3 text-xs text-slate-500"><ShieldCheck className="text-emerald-600" size={18} /> سيتم التواصل لتأكيد الطلب قبل الشحن. لا توجد عملية دفع حقيقية في هذه المعاينة.</div></div><div className="rounded-2xl bg-[#f7f8fa] p-4"><p className="font-black">ملخص السلة</p><div className="mt-4 space-y-3">{cartProducts.map((product) => <div key={product.id} className="flex items-center justify-between gap-3 text-sm"><span className="line-clamp-1">{product.name}</span><b>{product.price} ر.س</b></div>)}</div><div className="my-4 border-t border-slate-200" /><div className="flex items-center justify-between"><span className="text-slate-500">الإجمالي</span><b className="text-xl">{cartTotal} ر.س</b></div><Button className="mt-5 h-12 w-full rounded-xl bg-[#f97316] font-bold text-white hover:bg-[#ea580c]" onClick={() => { setCheckoutOpen(false); setCartOpen(false); }}>تأكيد الطلب <PackageCheck size={17} /></Button></div></div></div></div>}
+      {orderSuccess && <button className="fixed bottom-5 left-1/2 z-[80] -translate-x-1/2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-xl" onClick={() => setOrderSuccess(null)}>تم استلام طلبك رقم {orderSuccess} · إغلاق</button>}
+
+      {checkoutOpen && <div className="fixed inset-0 z-[70] flex items-center justify-center p-4"><button className="absolute inset-0 bg-[#0b1f33]/55" onClick={() => setCheckoutOpen(false)} aria-label="إغلاق الطلب" /><div className="relative max-h-[92vh] w-full max-w-3xl overflow-auto rounded-3xl bg-white p-5 shadow-2xl sm:p-7"><button className="absolute left-4 top-4 rounded-xl p-2 text-slate-500 hover:bg-slate-100" onClick={() => setCheckoutOpen(false)} aria-label="إغلاق"><X size={19} /></button><div className="mb-6"><p className="text-sm font-bold text-[#f97316]">الخطوة الأخيرة</p><h2 className="mt-1 text-2xl font-black">بيانات الشحن وملخص الطلب</h2></div><div className="grid gap-6 md:grid-cols-[1.2fr_.8fr]"><div className="space-y-4"><input className="h-12 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none focus:border-orange-300" placeholder="الاسم الكامل" value={checkoutForm.customerName} onChange={(e) => setCheckoutForm({ ...checkoutForm, customerName: e.target.value })} /><input className="h-12 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none focus:border-orange-300" placeholder="رقم الجوال" value={checkoutForm.phone} onChange={(e) => setCheckoutForm({ ...checkoutForm, phone: e.target.value })} /><textarea className="min-h-28 w-full rounded-xl border border-slate-200 p-4 text-sm outline-none focus:border-orange-300" placeholder="عنوان التوصيل بالتفصيل" value={checkoutForm.shippingAddress} onChange={(e) => setCheckoutForm({ ...checkoutForm, shippingAddress: e.target.value })} /><div className="flex items-center gap-2 rounded-xl bg-slate-50 p-3 text-xs text-slate-500"><ShieldCheck className="text-emerald-600" size={18} /> سيتم التواصل لتأكيد الطلب قبل الشحن. لا توجد عملية دفع حقيقية في هذه المعاينة.</div></div><div className="rounded-2xl bg-[#f7f8fa] p-4"><p className="font-black">ملخص السلة</p><div className="mt-4 space-y-3">{cartProducts.map((product) => <div key={product.id} className="flex items-center justify-between gap-3 text-sm"><span className="line-clamp-1">{product.name}</span><b>{product.price} ر.س</b></div>)}</div><div className="my-4 border-t border-slate-200" /><div className="flex items-center justify-between"><span className="text-slate-500">الإجمالي</span><b className="text-xl">{cartTotal} ر.س</b></div><Button className="mt-5 h-12 w-full rounded-xl bg-[#f97316] font-bold text-white hover:bg-[#ea580c]" onClick={() => createOrderMutation.mutate({ ...checkoutForm, items: cartProducts.map((product) => ({ productId: product.id, quantity: 1 })) })}>تأكيد الطلب <PackageCheck size={17} /></Button></div></div></div></div>}
     </div>
   );
 }

@@ -1,17 +1,7 @@
 import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
 
-/**
- * Core user table backing auth flow.
- * Extend this file with additional tables as your product grows.
- * Columns use camelCase to match both database fields and generated types.
- */
 export const users = mysqlTable("users", {
-  /**
-   * Surrogate primary key. Auto-incremented numeric value managed by the database.
-   * Use this for relations between tables.
-   */
   id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
@@ -22,7 +12,65 @@ export const users = mysqlTable("users", {
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
 });
 
+export const products = mysqlTable("products", {
+  id: int("id").autoincrement().primaryKey(),
+  sku: varchar("sku", { length: 80 }).notNull().unique(),
+  name: varchar("name", { length: 255 }).notNull(),
+  brand: varchar("brand", { length: 120 }).notNull(),
+  category: varchar("category", { length: 120 }).notNull(),
+  car: varchar("car", { length: 255 }).notNull(),
+  description: text("description"),
+  price: int("price").notNull(),
+  oldPrice: int("oldPrice"),
+  stockQuantity: int("stockQuantity").default(0).notNull(),
+  imageUrl: varchar("imageUrl", { length: 500 }).notNull(),
+  badge: varchar("badge", { length: 80 }),
+  rating: int("rating").default(0).notNull(),
+  status: mysqlEnum("status", ["active", "draft", "archived"]).default("active").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const vehicleFitments = mysqlTable("vehicle_fitments", {
+  id: int("id").autoincrement().primaryKey(),
+  productId: int("productId").notNull(),
+  make: varchar("make", { length: 100 }).notNull(),
+  model: varchar("model", { length: 120 }).notNull(),
+  yearFrom: int("yearFrom").notNull(),
+  yearTo: int("yearTo").notNull(),
+  engine: varchar("engine", { length: 80 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const orders = mysqlTable("orders", {
+  id: int("id").autoincrement().primaryKey(),
+  orderNumber: varchar("orderNumber", { length: 40 }).notNull().unique(),
+  userId: int("userId"),
+  customerName: varchar("customerName", { length: 180 }).notNull(),
+  phone: varchar("phone", { length: 40 }).notNull(),
+  shippingAddress: text("shippingAddress").notNull(),
+  subtotal: int("subtotal").notNull(),
+  shippingCost: int("shippingCost").default(0).notNull(),
+  total: int("total").notNull(),
+  status: mysqlEnum("status", ["new", "processing", "shipped", "completed", "cancelled"]).default("new").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const orderItems = mysqlTable("order_items", {
+  id: int("id").autoincrement().primaryKey(),
+  orderId: int("orderId").notNull(),
+  productId: int("productId").notNull(),
+  productName: varchar("productName", { length: 255 }).notNull(),
+  quantity: int("quantity").notNull(),
+  unitPrice: int("unitPrice").notNull(),
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
-
-// TODO: Add your tables here
+export type Product = typeof products.$inferSelect;
+export type InsertProduct = typeof products.$inferInsert;
+export type Order = typeof orders.$inferSelect;
+export type InsertOrder = typeof orders.$inferInsert;
+export type OrderItem = typeof orderItems.$inferSelect;
+export type InsertOrderItem = typeof orderItems.$inferInsert;
