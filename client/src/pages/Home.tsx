@@ -137,22 +137,22 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-[#f7f8fa] text-[#0b1f33]" dir="rtl">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({ "@context": "https://schema.org", "@type": "ItemList", name: "قطع غيار السيارات من سبير إكس", itemListElement: products.map((product, index) => ({ "@type": "ListItem", position: index + 1, item: { "@type": "Product", name: product.name, brand: { "@type": "Brand", name: product.brand }, image: `${window.location.origin}${product.image}`, sku: String(product.id), offers: { "@type": "Offer", price: product.price, priceCurrency: "SAR", availability: product.stock === "غير متوفر" ? "https://schema.org/OutOfStock" : "https://schema.org/InStock", url: `${window.location.origin}/#shop` } } })) }) }} />
-      <header className="sticky top-0 z-30 border-b border-yellow-500/60 bg-[#ffe900] text-[#111827] shadow-sm">
+      <header className="sticky top-0 z-30 border-b border-[#f97316]/60 bg-[#0b1f33] text-white shadow-lg shadow-[#0b1f33]/20">
         <div className="mx-auto flex min-h-[64px] max-w-[1400px] items-center gap-3 px-3 sm:gap-5 sm:px-6 lg:px-8">
           <a href="#" className="order-1 flex shrink-0 items-center" aria-label="سبير إكس الرئيسية"><img src="/assets/spearx-logo-yellow.jpg" alt="سبير إكس" className="h-11 w-[142px] rounded-lg object-contain sm:w-[165px]" /></a>
-          <button className="order-2 flex items-center gap-1 whitespace-nowrap rounded-lg px-2 py-2 text-sm font-bold hover:bg-black/5" onClick={() => setLocationOpen(true)} aria-label="تغيير موقع التوصيل"><MapPin size={20} /><span className="hidden sm:inline">{deliveryLocation.city}</span><ChevronDown size={15} /></button>
+          <button className="order-2 flex items-center gap-1 whitespace-nowrap rounded-lg px-2 py-2 text-sm font-bold hover:bg-white/10" onClick={() => setLocationOpen(true)} aria-label="تغيير موقع التوصيل"><MapPin size={20} className="text-[#fb923c]" /><span className="hidden sm:inline">{deliveryLocation.city}</span><ChevronDown size={15} /></button>
           <div className="order-3 hidden min-w-0 flex-1 items-center rounded-xl bg-white px-3 py-2.5 shadow-sm sm:flex sm:px-4 lg:max-w-[520px]">
             <input className="min-w-0 w-full bg-transparent text-sm outline-none placeholder:text-slate-500" placeholder="ابحث عن الفواكه الطازجة" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="بحث المنتجات" />
             <Search size={21} className="shrink-0 text-[#111827]" />
           </div>
-          <nav className={`${mobileMenu ? "absolute inset-x-3 top-[68px] flex" : "hidden"} order-4 z-40 flex-col gap-1 rounded-xl border border-yellow-600/30 bg-[#ffe900] p-3 shadow-xl lg:static lg:flex lg:flex-row lg:items-center lg:gap-1 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none`}>
-            <button className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold hover:bg-black/5" aria-label="تغيير اللغة"><Globe2 size={20} /><span>English</span></button>
-            <button className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold hover:bg-black/5" aria-label="تسجيل الدخول"><UserRound size={20} /><span>تسجيل الدخول</span></button>
-            <a className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold hover:bg-black/5" href="#track-order"><ClipboardList size={20} /><span>الطلبات</span></a>
-            <a className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold hover:bg-black/5" href="#shop"><Heart size={20} /><span>المفضلة</span></a>
-            <button className="relative flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold hover:bg-black/5" onClick={() => setCartOpen(true)} aria-label="عربة التسوق"><ShoppingCart size={21} /><span>عربة التسوق</span>{cartCount > 0 && <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#111827] px-1 text-[10px] font-bold text-[#ffe900]">{cartCount}</span>}</button>
+            <nav className={`${mobileMenu ? "absolute inset-x-3 top-[68px] flex" : "hidden"} order-4 z-40 flex-col gap-1 rounded-xl border border-[#f97316]/40 bg-[#0b1f33] p-3 text-white shadow-xl lg:static lg:flex lg:flex-row lg:items-center lg:gap-1 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none`}>
+            <button className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold hover:bg-white/10" aria-label="تغيير اللغة"><Globe2 size={20} className="text-[#fb923c]" /><span>English</span></button>
+            <button className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold hover:bg-white/10" aria-label="تسجيل الدخول"><UserRound size={20} className="text-[#fb923c]" /><span>تسجيل الدخول</span></button>
+            <a className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold hover:bg-white/10" href="#track-order"><ClipboardList size={20} className="text-[#fb923c]" /><span>الطلبات</span></a>
+            <a className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold hover:bg-white/10" href="#shop"><Heart size={20} className="text-[#fb923c]" /><span>المفضلة</span></a>
+            <button className="relative flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold hover:bg-white/10" onClick={() => setCartOpen(true)} aria-label="عربة التسوق"><ShoppingCart size={21} className="text-[#fb923c]" /><span>عربة التسوق</span>{cartCount > 0 && <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#f97316] px-1 text-[10px] font-bold text-white">{cartCount}</span>}</button>
           </nav>
-          <button className="order-5 rounded-lg p-2 hover:bg-black/5 lg:hidden" onClick={() => setMobileMenu(!mobileMenu)} aria-label="القائمة"><Menu size={23} /></button>
+          <button className="order-5 rounded-lg p-2 hover:bg-white/10 lg:hidden" onClick={() => setMobileMenu(!mobileMenu)} aria-label="القائمة"><Menu size={23} className="text-[#fb923c]" /></button>
         </div>
         <div className="mx-3 mb-2 flex items-center gap-2 rounded-xl bg-white px-3 py-2 md:hidden"><input className="w-full bg-transparent text-sm outline-none" placeholder="ابحث عن قطعة أو ماركة..." value={query} onChange={(e) => setQuery(e.target.value)} aria-label="بحث المنتجات" /><Search size={18} /></div>
       </header>
