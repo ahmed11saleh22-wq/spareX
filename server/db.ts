@@ -204,7 +204,7 @@ export async function createCustomerOrder(input: { userId: number | null; custom
     });
     const subtotal = lineItems.reduce((sum, line) => sum + line.product.price * line.quantity, 0);
     const shippingCost = subtotal >= 250 ? 0 : 25;
-    const orderNumber = `QH-${Date.now().toString().slice(-8)}`;
+    const orderNumber = `SX-${Date.now().toString().slice(-8)}`;
     await tx.insert(orders).values({ orderNumber, userId: input.userId, customerName: input.customerName, phone: input.phone, shippingAddress: input.shippingAddress, subtotal, shippingCost, total: subtotal + shippingCost, status: "new", shippingStatus: "pending", shippingUpdatedAt: new Date() });
     const created = await tx.select({ id: orders.id }).from(orders).where(eq(orders.orderNumber, orderNumber)).limit(1);
     const orderId = created[0]?.id;
