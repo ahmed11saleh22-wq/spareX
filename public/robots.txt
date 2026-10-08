@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/
+Sitemap: https://3000-io3cua91zxiff1uxt1vn9-c6552ee2.sg2.manus.computer/sitemap.xml

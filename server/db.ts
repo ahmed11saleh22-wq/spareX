@@ -149,6 +149,37 @@ export async function trackOrder(orderNumber: string, phone: string) {
   return { orderNumber: order.orderNumber, status: order.status, shippingStatus: order.shippingStatus, shippingStatusLabel: shippingStatusLabels[order.shippingStatus], carrier: order.carrier, trackingNumber: order.trackingNumber, estimatedDelivery: order.estimatedDelivery, updatedAt: order.shippingUpdatedAt ?? order.updatedAt, events };
 }
 
+async function updatePaymentRecord(input: { orderNumber: string; paymentId: string; status: "paid" | "failed" | "refunded" | "cancelled"; method?: string }) {
+  const db = await requireDb();
+  await db.update(orders).set({ paymentStatus: input.status, paymentMethod: input.method || null, moyasarPaymentId: input.paymentId, updatedAt: new Date() }).where(eq(orders.orderNumber, input.orderNumber));
+  return { success: true, status: input.status };
+}
+
+export async function verifyMoyasarPayment(input: { orderNumber: string; paymentId: string }) {
+  const secret = process.env.MOYASAR_SECRET_KEY;
+  if (!secret) throw new Error("Moyasar غير مفعّل بعد: أضف المفتاح السري في إعدادات المشروع.");
+  const db = await requireDb();
+  const found = await db.select({ total: orders.total }).from(orders).where(eq(orders.orderNumber, input.orderNumber)).limit(1);
+  const order = found[0];
+  if (!order) throw new Error("الطلب غير موجود");
+  const response = await fetch(`https://api.moyasar.com/v1/payments/${encodeURIComponent(input.paymentId)}`, { headers: { Authorization: `Basic ${Buffer.from(`${secret}:`).toString("base64")}` } });
+  if (!response.ok) throw new Error("تعذر التحقق من عملية الدفع لدى Moyasar");
+  const payment = await response.json() as { id: string; status: string; amount: number; currency: string; source?: { type?: string; company?: string } };
+  if (payment.id !== input.paymentId || payment.amount !== order.total * 100 || payment.currency !== "SAR") throw new Error("بيانات الدفع لا تطابق قيمة الطلب");
+  const status = payment.status === "paid" ? "paid" : payment.status === "refunded" ? "refunded" : payment.status === "cancelled" ? "cancelled" : "failed";
+  return updatePaymentRecord({ orderNumber: input.orderNumber, paymentId: input.paymentId, status, method: payment.source?.company || payment.source?.type });
+}
+
+export async function processMoyasarWebhook(event: { id?: string; type?: string; secret_token?: string; data?: { id?: string; status?: string; metadata?: Record<string, string>; source?: { type?: string; company?: string } } }) {
+  const webhookSecret = process.env.MOYASAR_WEBHOOK_SECRET;
+  if (!webhookSecret || event.secret_token !== webhookSecret) throw new Error("Invalid Moyasar webhook");
+  const payment = event.data;
+  const orderNumber = payment?.metadata?.orderNumber;
+  if (!payment?.id || !orderNumber) return { success: true, ignored: true };
+  const status = event.type === "payment_paid" || payment.status === "paid" ? "paid" : event.type === "payment_refunded" ? "refunded" : event.type === "payment_voided" ? "cancelled" : "failed";
+  return updatePaymentRecord({ orderNumber, paymentId: payment.id, status, method: payment.source?.company || payment.source?.type });
+}
+
 export async function getAdminOverview() {
   const db = await requireDb();
   const [sales, orderCount, productCount, lowStock] = await Promise.all([

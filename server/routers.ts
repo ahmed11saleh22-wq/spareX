@@ -35,6 +35,10 @@ export const appRouter = router({
     track: publicProcedure.input(z.object({ orderNumber: z.string().min(3).max(40), phone: z.string().min(4).max(40) })).mutation(async ({ input }) => { try { return await db.trackOrder(input.orderNumber, input.phone); } catch { throw new TRPCError({ code: "NOT_FOUND", message: "تعذر العثور على الطلب. تحقق من رقم الطلب وآخر 4 أرقام من الجوال." }); } }),
   }),
 
+  payments: router({
+    verifyMoyasar: publicProcedure.input(z.object({ orderNumber: z.string().min(3).max(40), paymentId: z.string().min(10).max(100) })).mutation(({ input }) => db.verifyMoyasarPayment(input)),
+  }),
+
   admin: router({
     overview: adminProcedure.query(() => db.getAdminOverview()),
     listProducts: adminProcedure.query(() => db.listAdminProducts()),

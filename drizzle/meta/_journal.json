@@ -22,6 +22,13 @@
       "when": 1791362175626,
       "tag": "0002_late_changeling",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1791364285512,
+      "tag": "0003_lethal_magus",
+      "breakpoints": true
     }
   ]
 }

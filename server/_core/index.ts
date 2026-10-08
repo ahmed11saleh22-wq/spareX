@@ -16,6 +16,16 @@ async function startServer() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
+  app.get("/api/moyasar/config", (_req, res) => res.json({ enabled: Boolean(process.env.MOYASAR_SECRET_KEY && process.env.VITE_MOYASAR_PUBLISHABLE_KEY), publishableApiKey: process.env.VITE_MOYASAR_PUBLISHABLE_KEY || null, currency: "SAR", country: "SA" }));
+  app.post("/api/moyasar/webhook", async (req, res) => {
+    try {
+      const result = await import("../db").then(({ processMoyasarWebhook }) => processMoyasarWebhook(req.body));
+      return res.status(200).json(result);
+    } catch (error) {
+      console.error("[Moyasar] webhook rejected", error);
+      return res.status(401).json({ success: false });
+    }
+  });
   app.get("/api/vin/lookup", (req, res) => {
     const vin = String(req.query.vin ?? "").toUpperCase().replace(/[\s-]/g, "");
     if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(vin)) {
@@ -35,6 +45,12 @@ async function startServer() {
   });
   app.get("/manus-routes.json", (_req, res) => {
     res.sendFile(path.resolve(process.cwd(), "public/manus-routes.json"));
+  });
+  app.get("/sitemap.xml", (_req, res) => {
+    res.type("application/xml").sendFile(path.resolve(process.cwd(), "public/sitemap.xml"));
+  });
+  app.get("/robots.txt", (_req, res) => {
+    res.type("text/plain").sendFile(path.resolve(process.cwd(), "public/robots.txt"));
   });
   registerOAuthRoutes(app);
   // tRPC API
