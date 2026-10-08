@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   BadgeCheck,
@@ -53,6 +53,7 @@ const categories = [
 
 const carOptions = ["اختر الماركة", "تويوتا", "هيونداي", "BMW", "مرسيدس", "نيسان"];
 const categoryOptions = ["كل الفئات", "فرامل", "فلاتر", "تعليق ومقصات", "كهرباء السيارة", "زيوت وسوائل"];
+const searchSuggestions = ["فحمات الفرامل", "فلتر الزيت", "فلتر الهواء", "بطارية سيارة", "مساعدات", "دينمو السيارة", "كمبروسر مكيف", "طرمبة ماء", "حساس الأكسجين", "بواجي السيارة"];
 const gulfDeliveryOptions = [
   { country: "السعودية", cities: ["الرياض", "جدة", "الدمام", "مكة المكرمة", "المدينة المنورة", "أبها"] },
   { country: "الإمارات", cities: ["دبي", "أبوظبي", "الشارقة", "العين", "رأس الخيمة"] },
@@ -64,6 +65,7 @@ const gulfDeliveryOptions = [
 
 export default function Home() {
   const [query, setQuery] = useState("");
+  const [suggestionIndex, setSuggestionIndex] = useState(0);
   const [car, setCar] = useState("اختر الماركة");
   const [category, setCategory] = useState("كل الفئات");
   const [sort, setSort] = useState("الأكثر صلة");
@@ -78,6 +80,10 @@ export default function Home() {
   const [checkoutForm, setCheckoutForm] = useState({ customerName: "", phone: "", shippingAddress: "" });
   const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
   const [paymentOrder, setPaymentOrder] = useState<{ orderNumber: string; total: number } | null>(null);
+  useEffect(() => {
+    const timer = window.setInterval(() => setSuggestionIndex((index) => (index + 1) % searchSuggestions.length), 2400);
+    return () => window.clearInterval(timer);
+  }, []);
   const createOrderMutation = trpc.orders.create.useMutation({ onSuccess: (result) => { setPaymentOrder(result); setCheckoutOpen(false); setCartOpen(false); setCart([]); setCheckoutForm({ customerName: "", phone: "", shippingAddress: "" }); } });
   const { data: catalogRows = [] } = trpc.catalog.list.useQuery();
   const { data: categoryRows = [] } = trpc.catalog.categories.useQuery();
@@ -142,7 +148,7 @@ export default function Home() {
           <a href="#" className="order-1 flex shrink-0 flex-col leading-none" aria-label="سبير X الرئيسية"><span className="text-[1.28rem] font-black tracking-tight sm:text-[1.45rem]">سـبـيـر <b className="text-[#f97316]">X</b></span><small className="mt-1 text-[8px] font-medium tracking-wide text-slate-300 sm:text-[9px]">قطع غيار السيارات</small></a>
           <button className="order-2 flex items-center gap-1 whitespace-nowrap rounded-lg px-2 py-2 text-sm font-bold hover:bg-white/10" onClick={() => setLocationOpen(true)} aria-label="تغيير موقع التوصيل"><MapPin size={20} className="text-[#fb923c]" /><span className="hidden sm:inline">{deliveryLocation.city}</span><ChevronDown size={15} /></button>
           <div className="order-3 hidden min-w-0 flex-1 items-center rounded-xl bg-white px-3 py-2.5 shadow-sm sm:flex sm:px-4 lg:max-w-[520px]">
-            <input className="min-w-0 w-full bg-transparent text-sm outline-none placeholder:text-slate-500" placeholder="ابحث عن الفواكه الطازجة" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="بحث المنتجات" />
+            <input className="min-w-0 w-full bg-transparent text-sm outline-none placeholder:text-slate-500" placeholder={`ابحث عن ${searchSuggestions[suggestionIndex]}`} value={query} onChange={(e) => setQuery(e.target.value)} aria-label="بحث المنتجات" />
             <Search size={21} className="shrink-0 text-[#111827]" />
           </div>
             <nav className={`${mobileMenu ? "absolute inset-x-3 top-[68px] flex" : "hidden"} order-4 z-40 flex-col gap-1 rounded-xl border border-[#f97316]/40 bg-[#0b1f33] p-3 text-white shadow-xl lg:static lg:flex lg:flex-row lg:items-center lg:gap-1 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none`}>
@@ -154,7 +160,7 @@ export default function Home() {
           </nav>
           <button className="order-5 rounded-lg p-2 hover:bg-white/10 lg:hidden" onClick={() => setMobileMenu(!mobileMenu)} aria-label="القائمة"><Menu size={23} className="text-[#fb923c]" /></button>
         </div>
-        <div className="mx-3 mb-2 flex items-center gap-2 rounded-xl bg-white px-3 py-2 md:hidden"><input className="w-full bg-transparent text-sm outline-none" placeholder="ابحث عن قطعة أو ماركة..." value={query} onChange={(e) => setQuery(e.target.value)} aria-label="بحث المنتجات" /><Search size={18} /></div>
+        <div className="mx-3 mb-2 flex items-center gap-2 rounded-xl bg-white px-3 py-2 md:hidden"><input className="w-full bg-transparent text-sm outline-none" placeholder={`ابحث عن ${searchSuggestions[suggestionIndex]}`} value={query} onChange={(e) => setQuery(e.target.value)} aria-label="بحث المنتجات" /><Search size={18} /></div>
       </header>
 
       <main>
