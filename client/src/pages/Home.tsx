@@ -9,6 +9,7 @@ import {
   Heart,
   ClipboardList,
   Globe2,
+  MessageCircle,
   MapPin,
   Menu,
   PackageCheck,
@@ -65,8 +66,10 @@ const gulfDeliveryOptions = [
 
 export default function Home() {
   const [query, setQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
   const [suggestionIndex, setSuggestionIndex] = useState(0);
   const [car, setCar] = useState("اختر الماركة");
+  const [model, setModel] = useState("اختر الموديل");
   const [category, setCategory] = useState("كل الفئات");
   const [sort, setSort] = useState("الأكثر صلة");
   const [cart, setCart] = useState<number[]>([]);
@@ -102,6 +105,15 @@ export default function Home() {
     stock: product.stockQuantity > 0 ? (product.stockQuantity < 5 ? `باقي ${product.stockQuantity} قطع` : "متوفر الآن") : "غير متوفر",
   }));
 
+  const liveSearchResults = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return [];
+    const productResults = products.filter((product) => [product.name, product.brand, product.car, product.category].join(" ").toLowerCase().includes(normalized)).slice(0, 4).map((product) => ({ type: "منتج", label: product.name, detail: `${product.brand} · ${product.category}`, id: product.id }));
+    const categoryResults = categories.filter((item) => item.label.toLowerCase().includes(normalized)).map((item) => ({ type: "تصنيف", label: item.label, detail: "تصفح جميع القطع في التصنيف" }));
+    const brandResults = Array.from(new Set(products.map((product) => product.brand))).filter((brand) => brand.toLowerCase().includes(normalized)).slice(0, 3).map((brand) => ({ type: "ماركة", label: brand, detail: "قطع متوافقة من هذه الماركة" }));
+    return [...productResults, ...categoryResults, ...brandResults].slice(0, 7);
+  }, [products, query]);
+
   const filteredProducts = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     const result = products.filter((product) => {
@@ -118,6 +130,7 @@ export default function Home() {
   const cartCount = cart.length;
   const cartProducts = products.filter((product) => cart.includes(product.id));
   const cartTotal = cartProducts.reduce((sum, product) => sum + product.price, 0);
+  const vehicleLabel = car === "اختر الماركة" ? "لم تحدد سيارة" : `${car}${model !== "اختر الموديل" ? ` ${model}` : ""}`;
 
   const addToCart = (id: number) => {
     setCart((current) => (current.includes(id) ? current : [...current, id]));
@@ -144,23 +157,27 @@ export default function Home() {
     <div className="min-h-screen bg-[#f7f8fa] text-[#0b1f33]" dir="rtl">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({ "@context": "https://schema.org", "@type": "ItemList", name: "قطع غيار السيارات من سبير إكس", itemListElement: products.map((product, index) => ({ "@type": "ListItem", position: index + 1, item: { "@type": "Product", name: product.name, brand: { "@type": "Brand", name: product.brand }, image: `${window.location.origin}${product.image}`, sku: String(product.id), offers: { "@type": "Offer", price: product.price, priceCurrency: "SAR", availability: product.stock === "غير متوفر" ? "https://schema.org/OutOfStock" : "https://schema.org/InStock", url: `${window.location.origin}/#shop` } } })) }) }} />
       <header className="sticky top-0 z-30 border-b border-[#f97316]/60 bg-[#0b1f33] text-white shadow-lg shadow-[#0b1f33]/20">
-        <div className="mx-auto flex min-h-[64px] max-w-[1400px] items-center gap-3 px-3 sm:gap-5 sm:px-6 lg:px-8">
+        <div className="flex min-h-8 items-center justify-center bg-[#f97316] px-3 py-1 text-center text-[11px] font-bold text-white sm:text-xs">شحن مجاني للطلبات فوق 300 ريال <span className="mx-2 text-orange-200">|</span> ضمان مطابقة القطع 100% أو استرجاع مجاني</div>
+        <div className="mx-auto flex min-h-[64px] max-w-[1400px] flex-wrap items-center gap-3 px-3 sm:gap-5 sm:px-6 lg:px-8">
           <a href="#" className="order-1 flex shrink-0 flex-col leading-none" aria-label="سبير X الرئيسية"><span className="text-[1.28rem] font-black tracking-tight sm:text-[1.45rem]">سـبـيـر <b className="text-[#f97316]">X</b></span><small className="mt-1 text-[8px] font-medium tracking-wide text-slate-300 sm:text-[9px]">قطع غيار السيارات</small></a>
           <button className="order-2 flex items-center gap-1 whitespace-nowrap rounded-lg px-2 py-2 text-sm font-bold hover:bg-white/10" onClick={() => setLocationOpen(true)} aria-label="تغيير موقع التوصيل"><MapPin size={20} className="text-[#fb923c]" /><span className="hidden sm:inline">{deliveryLocation.city}</span><ChevronDown size={15} /></button>
-          <div className="order-3 hidden min-w-0 flex-1 items-center rounded-xl bg-white px-3 py-2.5 shadow-sm sm:flex sm:px-4 lg:max-w-[520px]">
-            <input className="min-w-0 w-full bg-transparent text-sm text-[#111827] caret-[#f97316] outline-none placeholder:text-slate-500" placeholder={`ابحث عن ${searchSuggestions[suggestionIndex]}`} value={query} onChange={(e) => setQuery(e.target.value)} aria-label="بحث المنتجات" />
-            <Search size={21} className="shrink-0 text-[#111827]" />
+          <div className="relative order-3 hidden min-w-0 flex-1 sm:block lg:order-6 lg:basis-full lg:pb-3">
+            <div className="flex items-center rounded-xl bg-white px-3 py-2.5 shadow-sm sm:px-4"><input className="min-w-0 w-full bg-transparent text-sm text-[#111827] caret-[#f97316] outline-none placeholder:text-slate-500" placeholder="ابحث باسم القطعة، رقم القطعة الأصلي (OEM)، أو رقم الهيكل (VIN)..." value={query} onChange={(e) => setQuery(e.target.value)} onFocus={() => setSearchFocused(true)} aria-label="بحث المنتجات" /><Search size={21} className="shrink-0 text-[#111827]" /></div>
+            {searchFocused && liveSearchResults.length > 0 && <div className="absolute inset-x-0 top-[calc(100%+8px)] z-50 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 text-[#0b1f33] shadow-2xl">{liveSearchResults.map((result, index) => <button key={`${result.type}-${result.label}-${index}`} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-right hover:bg-orange-50" onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery(result.label); setSearchFocused(false); document.getElementById("shop")?.scrollIntoView({ behavior: "smooth" }); }}><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange-50 text-[#f97316]"><Search size={15} /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold">{result.label}</span><span className="block truncate text-xs text-slate-500">{result.type} · {result.detail}</span></span></button>)}</div>}
           </div>
+          <button className="order-3 hidden items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-right text-xs hover:border-[#f97316] lg:flex" onClick={() => document.getElementById("finder")?.scrollIntoView({ behavior: "smooth" })} aria-label="تغيير السيارة المحددة"><CarFront size={18} className="text-[#fb923c]" /><span><small className="block text-[10px] text-slate-400">السيارة المختارة</small><b className="block max-w-[135px] truncate">{vehicleLabel}</b></span><span className="text-[#fb923c] underline">تغيير</span></button>
             <nav className={`${mobileMenu ? "absolute inset-x-3 top-[68px] flex" : "hidden"} order-4 z-40 flex-col gap-1 rounded-xl border border-[#f97316]/40 bg-[#0b1f33] p-3 text-white shadow-xl lg:static lg:flex lg:flex-row lg:items-center lg:gap-1 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none`}>
             <button className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold hover:bg-white/10" aria-label="تغيير اللغة"><Globe2 size={20} className="text-[#fb923c]" /><span>English</span></button>
             <button className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold hover:bg-white/10" aria-label="تسجيل الدخول"><UserRound size={20} className="text-[#fb923c]" /><span>تسجيل الدخول</span></button>
+            <a className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold text-green-300 hover:bg-white/10" href="https://wa.me/?text=%D9%85%D8%B1%D8%AD%D8%A8%D8%A7%D8%8C%20%D8%A3%D8%AD%D8%AA%D8%A7%D8%AC%20%D9%85%D8%B3%D8%A7%D8%B9%D8%AF%D8%A9%20%D8%A8%D8%AE%D8%B5%D9%88%D8%B5%20%D9%82%D8%B7%D8%B9%D8%A9%20%D8%B3%D9%8A%D8%A7%D8%B1%D8%A9" target="_blank" rel="noreferrer" aria-label="تواصل معنا عبر واتساب"><MessageCircle size={20} /><span>دعم واتساب</span></a>
             <a className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold hover:bg-white/10" href="#track-order"><ClipboardList size={20} className="text-[#fb923c]" /><span>الطلبات</span></a>
             <a className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold hover:bg-white/10" href="#shop"><Heart size={20} className="text-[#fb923c]" /><span>المفضلة</span></a>
             <button className="relative flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold hover:bg-white/10" onClick={() => setCartOpen(true)} aria-label="عربة التسوق"><ShoppingCart size={21} className="text-[#fb923c]" /><span>عربة التسوق</span>{cartCount > 0 && <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#f97316] px-1 text-[10px] font-bold text-white">{cartCount}</span>}</button>
           </nav>
           <button className="order-5 rounded-lg p-2 hover:bg-white/10 lg:hidden" onClick={() => setMobileMenu(!mobileMenu)} aria-label="القائمة"><Menu size={23} className="text-[#fb923c]" /></button>
         </div>
-        <div className="mx-3 mb-2 flex items-center gap-2 rounded-xl bg-white px-3 py-2 md:hidden"><input className="w-full bg-transparent text-sm text-[#111827] caret-[#f97316] outline-none" placeholder={`ابحث عن ${searchSuggestions[suggestionIndex]}`} value={query} onChange={(e) => setQuery(e.target.value)} aria-label="بحث المنتجات" /><Search size={18} className="text-[#111827]" /></div>
+        <div className="relative mx-3 mb-2 md:hidden"><div className="flex items-center gap-2 rounded-xl bg-white px-3 py-2"><input className="w-full bg-transparent text-sm text-[#111827] caret-[#f97316] outline-none" placeholder="ابحث باسم القطعة، رقم القطعة الأصلي (OEM)، أو رقم الهيكل (VIN)..." value={query} onChange={(e) => setQuery(e.target.value)} onFocus={() => setSearchFocused(true)} aria-label="بحث المنتجات" /><Search size={18} className="text-[#111827]" /></div>{searchFocused && liveSearchResults.length > 0 && <div className="absolute inset-x-0 top-[calc(100%+6px)] z-50 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 text-[#0b1f33] shadow-2xl">{liveSearchResults.slice(0, 5).map((result, index) => <button key={`${result.type}-mobile-${result.label}-${index}`} className="flex w-full items-center gap-2 rounded-xl px-2 py-2 text-right hover:bg-orange-50" onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery(result.label); setSearchFocused(false); document.getElementById("shop")?.scrollIntoView({ behavior: "smooth" }); }}><Search size={14} className="text-[#f97316]" /><span className="truncate text-xs font-bold">{result.label}</span><small className="mr-auto text-[10px] text-slate-400">{result.type}</small></button>)}</div>}</div>
+        <button className="mx-3 mb-2 flex w-[calc(100%-1.5rem)] items-center justify-between rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-right text-xs lg:hidden" onClick={() => document.getElementById("finder")?.scrollIntoView({ behavior: "smooth" })} aria-label="تغيير السيارة المحددة"><span className="flex items-center gap-2"><CarFront size={16} className="text-[#fb923c]" /><span><small className="ml-1 text-slate-400">السيارة المختارة:</small><b>{vehicleLabel}</b></span></span><span className="text-[#fb923c] underline">تغيير</span></button>
       </header>
 
       <main>
@@ -184,7 +201,7 @@ export default function Home() {
 
         <section className="mx-auto max-w-7xl px-4 lg:px-8" id="finder">
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center"><div className="flex items-center gap-3 lg:w-1/4"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-50 text-[#f97316]"><CarFront size={22} /></span><div><p className="font-extrabold">ابحث حسب سيارتك</p><p className="text-xs text-slate-500">قطع مطابقة بدون تخمين</p></div></div><div className="grid flex-1 gap-3 sm:grid-cols-3"><SelectBox label="الماركة" value={car} options={carOptions} onChange={setCar} /><SelectBox label="الموديل" value="اختر الموديل" options={["اختر الموديل", "2020", "2021", "2022", "2023"]} onChange={() => {}} /><SelectBox label="الفئة" value={category} options={categoryOptions} onChange={setCategory} /></div><Button className="h-11 rounded-xl bg-[#0b1f33] px-5 font-bold text-white hover:bg-[#173b5d]" onClick={() => document.getElementById("shop")?.scrollIntoView({ behavior: "smooth" })}>اعرض القطع <ArrowLeft size={17} /></Button></div>
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center"><div className="flex items-center gap-3 lg:w-1/4"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-50 text-[#f97316]"><CarFront size={22} /></span><div><p className="font-extrabold">ابحث حسب سيارتك</p><p className="text-xs text-slate-500">قطع مطابقة بدون تخمين</p></div></div><div className="grid flex-1 gap-3 sm:grid-cols-3"><SelectBox label="الماركة" value={car} options={carOptions} onChange={setCar} /><SelectBox label="الموديل" value={model} options={["اختر الموديل", "2020", "2021", "2022", "2023"]} onChange={setModel} /><SelectBox label="الفئة" value={category} options={categoryOptions} onChange={setCategory} /></div><Button className="h-11 rounded-xl bg-[#0b1f33] px-5 font-bold text-white hover:bg-[#173b5d]" onClick={() => document.getElementById("shop")?.scrollIntoView({ behavior: "smooth" })}>اعرض القطع <ArrowLeft size={17} /></Button></div>
           </div>
         </section>
 
