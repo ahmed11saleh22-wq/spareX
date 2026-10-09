@@ -184,7 +184,6 @@ export default function Home() {
   const addToCart = (id: number) => {
     setCart((current) => (current.includes(id) ? current : [...current, id]));
     setCartQuantities((current) => ({ ...current, [id]: (current[id] ?? 0) + 1 }));
-    setCartOpen(true);
   };
   const updateCartQuantity = (id: number, quantity: number) => {
     if (quantity <= 0) {
