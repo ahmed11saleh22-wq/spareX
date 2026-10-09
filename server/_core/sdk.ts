@@ -322,6 +322,10 @@ class SDKServer {
       lastSignedIn: signedInAt,
     });
 
+    // Re-read after the upsert so owner promotion is reflected immediately in
+    // the request instead of requiring a second login/session refresh.
+    user = await db.getUserByOpenId(user.openId) ?? user;
+
     return user;
   }
 }
