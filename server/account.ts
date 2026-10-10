@@ -13,15 +13,30 @@ export type RegistrationInput = {
   password: string;
   termsAccepted: boolean;
   workshopName?: string;
+  workshopNameEn?: string;
+  managerName?: string;
   city?: string;
+  country?: string;
+  whatsapp?: string;
+  district?: string;
   address?: string;
+  mapUrl?: string;
+  tradeLicenseNumber?: string;
+  licenseExpiresAt?: string;
+  taxNumber?: string;
+  branchCount?: number;
+  technicianCount?: number;
+  notes?: string;
   businessType?: string;
   monthlyVolume?: string;
   specialties?: string[];
   warehouseDetails?: string;
   warehouseCount?: number;
   tradeLicense?: string;
+  taxCertificate?: string;
+  storefrontImage?: string;
   logo?: string;
+  vehicleSpecialties?: string[];
 };
 
 const OTP_TTL_SECONDS = Math.max(60, Number(process.env.OTP_TTL_SECONDS || 300));
@@ -75,6 +90,8 @@ export async function startRegistration(input: RegistrationInput) {
   const existingPhone = await db.select({ id: users.id }).from(users).where(eq(users.phone, phone)).limit(1);
   if (existingPhone.length) throw new Error("رقم الهاتف مستخدم مسبقاً");
   const storedTradeLicense = await persistRegistrationAsset(input.tradeLicense, `${challengeSafeName(email)}-license`, "document");
+  const storedTaxCertificate = await persistRegistrationAsset(input.taxCertificate, `${challengeSafeName(email)}-tax`, "document");
+  const storedStorefront = await persistRegistrationAsset(input.storefrontImage, `${challengeSafeName(email)}-storefront`, "image");
   const storedLogo = await persistRegistrationAsset(input.logo, `${challengeSafeName(email)}-logo`, "image");
 
   const challengeId = randomBytes(24).toString("hex");
@@ -85,6 +102,8 @@ export async function startRegistration(input: RegistrationInput) {
     email,
     phone,
     tradeLicense: storedTradeLicense,
+    taxCertificate: storedTaxCertificate,
+    storefrontImage: storedStorefront,
     logo: storedLogo,
     password: undefined,
     passwordHash,
@@ -142,14 +161,31 @@ export async function verifyRegistration(challengeId: string, code: string) {
       await tx.insert(workshops).values({
         userId: (await tx.select({ id: users.id }).from(users).where(eq(users.openId, openId)).limit(1))[0]!.id,
         workshopName: payload.workshopName!,
+        workshopNameEn: payload.workshopNameEn ?? null,
+        managerName: payload.managerName ?? payload.name,
+        phone: payload.phone,
+        whatsapp: payload.whatsapp ?? payload.phone,
+        email: payload.email,
+        country: payload.country ?? null,
         city: payload.city!,
+        district: payload.district ?? null,
         address: payload.address!,
+        mapUrl: payload.mapUrl ?? null,
+        tradeLicenseNumber: payload.tradeLicenseNumber ?? null,
+        licenseExpiresAt: payload.licenseExpiresAt ?? null,
+        taxNumber: payload.taxNumber ?? null,
+        branchCount: payload.branchCount ?? null,
+        technicianCount: payload.technicianCount ?? null,
+        notes: payload.notes ?? null,
         businessType: payload.businessType ?? "متعدد الخدمات",
         monthlyVolume: payload.monthlyVolume ?? "غير محدد",
         specialties: JSON.stringify(payload.specialties ?? []),
+        vehicleSpecialties: JSON.stringify(payload.vehicleSpecialties ?? []),
         warehouseDetails: payload.warehouseDetails ?? null,
         warehouseCount: payload.warehouseCount ?? 0,
         tradeLicense: payload.tradeLicense ?? null,
+        taxCertificate: payload.taxCertificate ?? null,
+        storefrontImage: payload.storefrontImage ?? null,
         logo: payload.logo ?? null,
         approvalStatus: "pending",
       });
@@ -215,15 +251,21 @@ export async function listWorkshopApplications() {
   return db.select({ workshop: workshops, user: users }).from(workshops).innerJoin(users, eq(workshops.userId, users.id)).orderBy(desc(workshops.createdAt));
 }
 
-export async function updateWorkshopApproval(id: number, approvalStatus: "approved" | "rejected" | "pending") {
+export async function updateWorkshopApproval(id: number, approvalStatus: "approved" | "rejected" | "pending" | "suspended" | "requires_changes", details: { rejectionReason?: string; changeFields?: string[]; reapplyAllowed?: boolean; internalNotes?: string } = {}) {
   const db = await requireDatabase();
   const rows = await db.select({ userId: workshops.userId }).from(workshops).where(eq(workshops.id, id)).limit(1);
   const workshop = rows[0];
   if (!workshop) throw new Error("طلب الورشة غير موجود");
   await db.transaction(async (tx) => {
-    await tx.update(workshops).set({ approvalStatus, updatedAt: new Date() }).where(eq(workshops.id, id));
-    await tx.update(users).set({ status: approvalStatus === "rejected" ? "suspended" : approvalStatus === "approved" ? "active" : "pending", updatedAt: new Date() }).where(eq(users.id, workshop.userId));
+    await tx.update(workshops).set({ approvalStatus, rejectionReason: details.rejectionReason ?? null, changeFields: details.changeFields ? JSON.stringify(details.changeFields) : null, reapplyAllowed: details.reapplyAllowed ?? false, internalNotes: details.internalNotes ?? null, updatedAt: new Date() }).where(eq(workshops.id, id));
+    await tx.update(users).set({ status: approvalStatus === "suspended" ? "suspended" : "active", updatedAt: new Date() }).where(eq(users.id, workshop.userId));
   });
+  return { success: true };
+}
+
+export async function updateWorkshopPricing(id: number, input: { workshopLevel?: "Bronze" | "Silver" | "Gold" | "Platinum"; discountPercent?: number; priceListId?: string; minOrderAmount?: number; creditLimit?: number; paymentTermDays?: number; creditAllowed?: boolean }) {
+  const db = await requireDatabase();
+  await db.update(workshops).set({ ...input, updatedAt: new Date() }).where(eq(workshops.id, id));
   return { success: true };
 }
 
