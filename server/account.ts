@@ -3,6 +3,7 @@ import { and, desc, eq, or } from "drizzle-orm";
 import { authSessions, registrationChallenges, users, vehicles, workshops } from "../drizzle/schema";
 import { getDb } from "./db";
 import { hashOtp, hashPassword, normalizePhone, safeUser, verifyPassword } from "./self-auth";
+import { storagePut } from "./storage";
 
 export type RegistrationInput = {
   accountType: "customer" | "workshop";
@@ -10,6 +11,7 @@ export type RegistrationInput = {
   phone: string;
   email: string;
   password: string;
+  termsAccepted: boolean;
   workshopName?: string;
   city?: string;
   address?: string;
@@ -22,6 +24,24 @@ export type RegistrationInput = {
   logo?: string;
 };
 
+const OTP_TTL_SECONDS = Math.max(60, Number(process.env.OTP_TTL_SECONDS || 300));
+
+function challengeSafeName(email: string) {
+  return email.replace(/[^a-z0-9]+/gi, "-").slice(0, 60) || "workshop";
+}
+
+async function persistRegistrationAsset(value: string | undefined, name: string, kind: "document" | "image") {
+  if (!value || !value.startsWith("data:")) return value;
+  const match = value.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) throw new Error("صيغة المرفق غير صحيحة");
+  const mime = match[1];
+  if (kind === "image" && !mime.startsWith("image/")) throw new Error("شعار الورشة يجب أن يكون صورة");
+  if (kind === "document" && !mime.startsWith("image/") && mime !== "application/pdf") throw new Error("الرخصة يجب أن تكون صورة أو ملف PDF");
+  const data = Buffer.from(match[2], "base64");
+  if (data.byteLength > 5 * 1024 * 1024) throw new Error("حجم المرفق يجب ألا يتجاوز 5 ميجابايت");
+  return (await storagePut(`registrations/${name}`, data, mime)).url;
+}
+
 function requireDatabase() {
   return getDb().then((db) => {
     if (!db) throw new Error("قاعدة البيانات غير متاحة حالياً");
@@ -32,13 +52,17 @@ function requireDatabase() {
 function validateRegistration(input: RegistrationInput) {
   const email = input.email.trim().toLowerCase();
   const phone = normalizePhone(input.phone);
+  if (!input.termsAccepted) throw new Error("الموافقة على الشروط والخصوصية مطلوبة");
   if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error("أدخل بريداً إلكترونياً صحيحاً");
   if (!/^\+\d{8,15}$/.test(phone)) throw new Error("أدخل رقم جوال صحيحاً مع مفتاح الدولة");
   if (input.name.trim().length < 2) throw new Error("أدخل الاسم الكامل");
   if (input.password.length < 8) throw new Error("كلمة المرور يجب أن تتكون من 8 أحرف أو أكثر");
   if (!/[A-Za-z\u0600-\u06ff]/.test(input.password) || !/\d/.test(input.password)) throw new Error("أضف حرفاً ورقماً إلى كلمة المرور");
-  if (input.accountType === "workshop" && (!input.workshopName?.trim() || !input.city?.trim() || !input.address?.trim())) {
-    throw new Error("أكمل اسم الورشة والمدينة والعنوان");
+  if (input.accountType === "workshop" && (!input.workshopName?.trim() || !input.city?.trim() || !input.address?.trim() || !input.businessType?.trim())) {
+    throw new Error("أكمل اسم الورشة والمدينة ونوع النشاط والعنوان");
+  }
+  if (input.accountType === "workshop" && (!input.specialties || input.specialties.length === 0)) {
+    throw new Error("يرجى اختيار نوع نشاط واحد على الأقل");
   }
   return { email, phone };
 }
@@ -46,8 +70,12 @@ function validateRegistration(input: RegistrationInput) {
 export async function startRegistration(input: RegistrationInput) {
   const db = await requireDatabase();
   const { email, phone } = validateRegistration(input);
-  const existing = await db.select({ id: users.id }).from(users).where(or(eq(users.email, email), eq(users.phone, phone))).limit(1);
-  if (existing.length) throw new Error("يوجد حساب مسجل بهذا البريد أو رقم الجوال");
+  const existingEmail = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
+  if (existingEmail.length) throw new Error("البريد الإلكتروني مستخدم مسبقاً");
+  const existingPhone = await db.select({ id: users.id }).from(users).where(eq(users.phone, phone)).limit(1);
+  if (existingPhone.length) throw new Error("رقم الهاتف مستخدم مسبقاً");
+  const storedTradeLicense = await persistRegistrationAsset(input.tradeLicense, `${challengeSafeName(email)}-license`, "document");
+  const storedLogo = await persistRegistrationAsset(input.logo, `${challengeSafeName(email)}-logo`, "image");
 
   const challengeId = randomBytes(24).toString("hex");
   const passwordHash = await hashPassword(input.password);
@@ -56,12 +84,14 @@ export async function startRegistration(input: RegistrationInput) {
     name: input.name.trim(),
     email,
     phone,
+    tradeLicense: storedTradeLicense,
+    logo: storedLogo,
     password: undefined,
     passwordHash,
     specialties: input.specialties ?? [],
     warehouseCount: input.warehouseCount ?? 0,
   };
-  const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+  const expiresAt = new Date(Date.now() + OTP_TTL_SECONDS * 1000);
   await db.insert(registrationChallenges).values({
     challengeId,
     accountType: input.accountType,
@@ -69,17 +99,19 @@ export async function startRegistration(input: RegistrationInput) {
     payload: JSON.stringify(payload),
     codeHash: hashOtp(challengeId, "123456"),
     expiresAt,
+    lastSentAt: new Date(),
   });
-  return { challengeId, expiresInSeconds: 300, maskedPhone: `${phone.slice(0, 4)}••••${phone.slice(-2)}`, debugCode: "123456" };
+  return { challengeId, expiresInSeconds: OTP_TTL_SECONDS, maskedPhone: `${phone.slice(0, 4)}••••${phone.slice(-2)}`, debugCode: "123456" };
 }
 
 export async function resendRegistrationOtp(challengeId: string) {
   const db = await requireDatabase();
   const rows = await db.select().from(registrationChallenges).where(eq(registrationChallenges.challengeId, challengeId)).limit(1);
   if (!rows[0] || rows[0].verifiedAt || rows[0].expiresAt.getTime() < Date.now()) throw new Error("انتهت صلاحية طلب التسجيل، ابدأ التسجيل من جديد");
-  const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-  await db.update(registrationChallenges).set({ codeHash: hashOtp(challengeId, "123456"), expiresAt, attempts: 0 }).where(eq(registrationChallenges.id, rows[0].id));
-  return { expiresInSeconds: 300, debugCode: "123456" };
+  if (Date.now() - rows[0].lastSentAt.getTime() < 30_000) throw new Error("انتظر 30 ثانية قبل إعادة إرسال الرمز");
+  const expiresAt = new Date(Date.now() + OTP_TTL_SECONDS * 1000);
+  await db.update(registrationChallenges).set({ codeHash: hashOtp(challengeId, "123456"), expiresAt, lastSentAt: new Date(), attempts: 0 }).where(eq(registrationChallenges.id, rows[0].id));
+  return { expiresInSeconds: OTP_TTL_SECONDS, debugCode: "123456" };
 }
 
 export async function verifyRegistration(challengeId: string, code: string) {

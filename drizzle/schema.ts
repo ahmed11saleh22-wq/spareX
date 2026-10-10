@@ -42,6 +42,7 @@ export const registrationChallenges = mysqlTable("registration_challenges", {
   payload: text("payload").notNull(),
   codeHash: varchar("codeHash", { length: 128 }).notNull(),
   expiresAt: timestamp("expiresAt").notNull(),
+  lastSentAt: timestamp("lastSentAt").defaultNow().notNull(),
   attempts: int("attempts").default(0).notNull(),
   verifiedAt: timestamp("verifiedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

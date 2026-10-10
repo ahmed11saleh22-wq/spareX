@@ -1,0 +1,1 @@
+ALTER TABLE `registration_challenges` ADD `lastSentAt` timestamp DEFAULT (now()) NOT NULL;

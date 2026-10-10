@@ -23,8 +23,8 @@ export const appRouter = router({
       }
     }),
     startRegistration: publicProcedure.input(z.object({
-      accountType: z.enum(["customer", "workshop"]), name: z.string().min(2).max(180), phone: z.string().min(8).max(40), email: z.string().email().max(320), password: z.string().min(8).max(200),
-      workshopName: z.string().max(180).optional(), city: z.string().max(100).optional(), address: z.string().max(1000).optional(), businessType: z.string().max(100).optional(), monthlyVolume: z.string().max(80).optional(), specialties: z.array(z.string().max(100)).max(20).optional(), warehouseDetails: z.string().max(1000).optional(), warehouseCount: z.number().int().min(0).max(100).optional(), tradeLicense: z.string().max(500).optional(), logo: z.string().max(500).optional(),
+      accountType: z.enum(["customer", "workshop"]), name: z.string().min(2).max(180), phone: z.string().min(8).max(40), email: z.string().email().max(320), password: z.string().min(8).max(200), termsAccepted: z.literal(true),
+      workshopName: z.string().max(180).optional(), city: z.string().max(100).optional(), address: z.string().max(1000).optional(), businessType: z.string().max(100).optional(), monthlyVolume: z.string().max(80).optional(), specialties: z.array(z.string().max(100)).max(20).optional(), warehouseDetails: z.string().max(1000).optional(), warehouseCount: z.number().int().min(0).max(100).optional(), tradeLicense: z.string().max(8000000).optional(), logo: z.string().max(8000000).optional(),
     })).mutation(async ({ input }) => {
       try { return await account.startRegistration(input); }
       catch (error) { throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "تعذر بدء التسجيل" }); }
