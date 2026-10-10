@@ -212,16 +212,16 @@ export default function Home() {
   }, []);
   const createOrderMutation = trpc.orders.create.useMutation({ onSuccess: (result) => { setPaymentOrder(result); setCheckoutOpen(false); setCartOpen(false); setCart([]); setCartQuantities({}); setCheckoutForm({ customerName: "", phone: "", shippingAddress: "" }); } });
   const passwordLoginMutation = trpc.auth.loginPassword.useMutation({ onSuccess: () => { void utils.auth.me.invalidate(); setAuthError(""); setAuthOpen(false); setAuthPassword(""); }, onError: (error) => setAuthError(error.message) });
-  const { data: vehicleRows = [] } = trpc.account.vehicles.list.useQuery(undefined, { enabled: isAuthenticated, retry: false });
+  const vehicleQuery = trpc.account.vehicles.list.useQuery(undefined, { enabled: isAuthenticated, retry: false });
   const saveVehicleMutation = trpc.account.vehicles.save.useMutation({ onSuccess: () => { void utils.account.vehicles.list.invalidate(); setVehicleSavedNotice(true); setEditingVehicleId(null); } });
   const deleteVehicleMutation = trpc.account.vehicles.delete.useMutation({ onSuccess: () => { void utils.account.vehicles.list.invalidate(); } });
   const primaryVehicleMutation = trpc.account.vehicles.setPrimary.useMutation({ onSuccess: () => { void utils.account.vehicles.list.invalidate(); } });
   const { data: catalogRows = [] } = trpc.catalog.list.useQuery();
   const { data: categoryRows = [] } = trpc.catalog.categories.useQuery();
   useEffect(() => {
-    if (!isAuthenticated) return;
-    setSavedVehicles(vehicleRows.map((vehicle) => ({ id: vehicle.id, label: `${vehicle.make} ${vehicle.model} ${vehicle.year}`, vin: vehicle.vin || "غير مضاف", primary: vehicle.isPrimary })));
-  }, [isAuthenticated, vehicleRows]);
+    if (!isAuthenticated || !vehicleQuery.data) return;
+    setSavedVehicles(vehicleQuery.data.map((vehicle) => ({ id: vehicle.id, label: `${vehicle.make} ${vehicle.model} ${vehicle.year}`, vin: vehicle.vin || "غير مضاف", primary: vehicle.isPrimary })));
+  }, [isAuthenticated, vehicleQuery.data]);
   const categoryCards = categories.map((item) => ({ ...item, count: `${Number(categoryRows.find((row) => row.category === item.label)?.count ?? 0)} قطعة` }));
   const products: Product[] = catalogRows.map((product) => ({
     id: product.id,
