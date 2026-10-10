@@ -271,6 +271,10 @@ export default function Home() {
   };
 
   const openProfileTab = (tab: string) => { setProfileTab(tab); setProfileOpen(true); setUserMenuOpen(false); };
+  const submitSearch = () => {
+    setSearchFocused(false);
+    document.getElementById("shop")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
   useEffect(() => {
     const handleOutsidePointer = (event: PointerEvent) => {
       const target = event.target as Node;
@@ -291,8 +295,8 @@ export default function Home() {
             <button className="hidden items-center gap-1 whitespace-nowrap rounded-lg px-1 py-2 text-xs font-bold hover:bg-white/10 sm:flex sm:px-2" onClick={() => setLocationOpen(true)} aria-label="تغيير موقع التوصيل"><MapPin size={18} className="text-[#fb923c]" /><span>إلى {deliveryLocation.city}</span><ChevronDown size={13} /></button>
           </div>
           <div className="relative order-2 min-w-0 flex-1">
-            <div className="flex h-10 items-center rounded-full border border-slate-200 bg-white px-3 shadow-sm sm:h-11 sm:px-4"><input className="min-w-0 w-full bg-transparent text-xs text-[#111827] caret-[#f97316] outline-none placeholder:text-slate-500 sm:text-sm" placeholder="ابحث باسم القطعة، الرقم الأصلي للقطعة، أو رقم الهيكل..." value={query} onChange={(e) => setQuery(e.target.value)} onFocus={() => setSearchFocused(true)} aria-label="بحث المنتجات" /><Search size={19} className="shrink-0 text-[#111827]" /></div>
-            {searchFocused && liveSearchResults.length > 0 && <div className="absolute inset-x-0 top-[calc(100%+8px)] z-50 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 text-[#0b1f33] shadow-2xl">{liveSearchResults.map((result, index) => <button key={`${result.type}-${result.label}-${index}`} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-right hover:bg-orange-50" onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery(result.label); setSearchFocused(false); document.getElementById("shop")?.scrollIntoView({ behavior: "smooth" }); }}><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange-50 text-[#f97316]"><Search size={15} /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold">{result.label}</span><span className="block truncate text-xs text-slate-500">{result.type} · {result.detail}</span></span></button>)}</div>}
+            <div className="flex h-10 items-center rounded-full border border-slate-200 bg-white px-3 shadow-sm sm:h-11 sm:px-4"><input className="min-w-0 w-full bg-transparent text-xs text-[#111827] caret-[#f97316] outline-none placeholder:text-slate-500 sm:text-sm" placeholder="ابحث باسم القطعة، الرقم الأصلي للقطعة، أو رقم الهيكل..." value={query} onChange={(e) => setQuery(e.target.value)} onFocus={() => setSearchFocused(true)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submitSearch(); } }} aria-label="بحث المنتجات" /><button type="button" className="flex shrink-0 items-center justify-center rounded-full p-1 text-[#111827] transition hover:bg-orange-50 hover:text-[#f97316]" onClick={submitSearch} aria-label="تنفيذ البحث"><Search size={19} /></button></div>
+            {searchFocused && liveSearchResults.length > 0 && <div className="absolute inset-x-0 top-[calc(100%+8px)] z-50 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 text-[#0b1f33] shadow-2xl">{liveSearchResults.map((result, index) => <button key={`${result.type}-${result.label}-${index}`} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-right hover:bg-orange-50" onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery(result.label); submitSearch(); }}><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange-50 text-[#f97316]"><Search size={15} /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold">{result.label}</span><span className="block truncate text-xs text-slate-500">{result.type} · {result.detail}</span></span></button>)}</div>}
           </div>
           <nav className="order-3 flex shrink-0 items-center gap-0.5 sm:gap-1" aria-label="خيارات الحساب والتسوق">
             <button className="hidden rounded-lg px-2 py-2 text-xs font-bold hover:bg-white/10 sm:flex sm:items-center sm:gap-1" aria-label="تغيير اللغة"><Globe2 size={17} className="text-[#fb923c]" /><span>العربية</span></button>
@@ -305,7 +309,7 @@ export default function Home() {
         </div>
       </header>
       <div className="h-16" aria-hidden="true" />
-      <nav className="relative z-20 border-b border-slate-200 bg-white text-[#0b1f33] shadow-sm" aria-label="تصنيفات قطع الغيار"><div className="mx-auto flex w-full max-w-[1500px] flex-wrap items-center justify-center gap-0.5 overflow-visible px-2 py-2 text-[11px] font-bold sm:gap-1 sm:px-4 lg:px-6">{megaMenuCategories.map((category) => <CategoryMegaMenu key={category.title} category={category} onSelect={(item) => { setQuery(item); document.getElementById("shop")?.scrollIntoView({ behavior: "smooth" }); }} />)}</div></nav>
+      <nav className="relative z-20 border-b border-slate-200 bg-white text-[#0b1f33] shadow-sm" aria-label="تصنيفات قطع الغيار"><div className="mx-auto flex w-full max-w-[1500px] flex-wrap items-center justify-center gap-0.5 overflow-visible px-2 py-2 text-[11px] font-bold sm:gap-1 sm:px-4 lg:px-6">{megaMenuCategories.map((category) => <CategoryMegaMenu key={category.title} category={category} onSelect={(item) => { setQuery(item); submitSearch(); }} />)}</div></nav>
       <a className="fixed bottom-5 left-5 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-[#25D366] text-white shadow-lg shadow-green-900/25 transition hover:-translate-y-1 hover:bg-[#1ebe5d]" href="https://wa.me/?text=%D9%85%D8%B1%D8%AD%D8%A8%D8%A7%D8%8C%20%D8%A3%D8%AD%D8%AA%D8%A7%D8%AC%20%D9%85%D8%B3%D8%A7%D8%B9%D8%AF%D8%A9%20%D8%A8%D8%AE%D8%B5%D9%88%D8%B5%20%D9%82%D8%B7%D8%B9%D8%A9%20%D8%B3%D9%8A%D8%A7%D8%B1%D8%A9" target="_blank" rel="noreferrer" aria-label="تواصل مع دعم واتساب"><MessageCircle size={24} /></a>
 
       <main>
