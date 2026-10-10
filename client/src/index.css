@@ -37,3 +37,22 @@ body { margin: 0; min-width: 320px; background: var(--background); color: var(--
 button, input, select { font-family: inherit; }
 button:not(:disabled), a[href], select:not(:disabled) { cursor: pointer; }
 ::selection { background: #fed7aa; color: #0b1f33; }
+
+@keyframes dropdown-in {
+  from { opacity: 0; transform: translateY(-8px) scale(.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes cart-in {
+  from { opacity: 0; transform: translateY(14px) scale(.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-dropdown-in { animation: dropdown-in .2s cubic-bezier(.22,1,.36,1) both; }
+.animate-cart-in { animation: cart-in .28s cubic-bezier(.22,1,.36,1) both; }
+.animate-fade-in { animation: fade-in .2s ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
