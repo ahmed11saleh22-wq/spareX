@@ -275,6 +275,20 @@ export default function Home() {
     setSearchFocused(false);
     document.getElementById("shop")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+  const goHome = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    setSearchFocused(false);
+    setUserMenuOpen(false);
+    setVehicleMenuOpen(false);
+    setProfileOpen(false);
+    setAuthOpen(false);
+    setCartOpen(false);
+    setLocationOpen(false);
+    setCheckoutOpen(false);
+    setSelectedProduct(null);
+    window.history.replaceState(null, "", "/");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
   useEffect(() => {
     const handleOutsidePointer = (event: PointerEvent) => {
       const target = event.target as Node;
@@ -291,7 +305,7 @@ export default function Home() {
       <header className="fixed inset-x-0 top-0 z-50 border-b border-[#203a55] bg-[#0b1f33] text-white shadow-lg shadow-[#0b1f33]/20">
         <div className="mx-auto flex min-h-[64px] w-full max-w-[1500px] items-center justify-between gap-2 overflow-visible px-3 sm:gap-4 sm:px-6 lg:gap-7 lg:px-8">
           <div className="order-1 flex shrink-0 items-center gap-2 sm:gap-4">
-            <a href="#" className="flex shrink-0 flex-col leading-none" aria-label="سبير X الرئيسية"><span className="text-[1.18rem] font-black tracking-tight sm:text-[1.45rem]">سـبـيـر <b className="text-[#f97316]">X</b></span><small className="mt-1 text-[7px] font-medium tracking-wide text-slate-300 sm:text-[9px]">قطع غيار السيارات</small></a>
+            <a href="/" onClick={goHome} className="flex shrink-0 flex-col leading-none" aria-label="سبير X الرئيسية"><span className="text-[1.18rem] font-black tracking-tight sm:text-[1.45rem]">سـبـيـر <b className="text-[#f97316]">X</b></span><small className="mt-1 text-[7px] font-medium tracking-wide text-slate-300 sm:text-[9px]">قطع غيار السيارات</small></a>
             <button className="hidden items-center gap-1 whitespace-nowrap rounded-lg px-1 py-2 text-xs font-bold hover:bg-white/10 sm:flex sm:px-2" onClick={() => setLocationOpen(true)} aria-label="تغيير موقع التوصيل"><MapPin size={18} className="text-[#fb923c]" /><span>إلى {deliveryLocation.city}</span><ChevronDown size={13} /></button>
           </div>
           <div className="relative order-2 min-w-0 flex-1">
