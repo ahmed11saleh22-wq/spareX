@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { randomBytes } from "node:crypto";
 import express from "express";
 import { createServer } from "http";
 import path from "node:path";
@@ -53,6 +54,18 @@ async function startServer() {
     res.type("text/plain").sendFile(path.resolve(process.cwd(), "public/robots.txt"));
   });
   registerOAuthRoutes(app);
+  app.use("/api/trpc", (req, res, next) => {
+    const cookieValue = req.headers.cookie?.match(/(?:^|;\s*)sparex_csrf=([^;]+)/)?.[1] ?? "";
+    if (!cookieValue) {
+      res.cookie("sparex_csrf", randomBytes(24).toString("hex"), { ...getCsrfCookieOptions(req) });
+      if (req.method === "POST") return res.status(403).json({ error: "أعد المحاولة بعد تهيئة حماية الطلب" });
+      return next();
+    }
+    if (req.method === "POST" && req.header("x-sparex-csrf") !== decodeURIComponent(cookieValue)) {
+      return res.status(403).json({ error: "طلب غير مصرح به" });
+    }
+    return next();
+  });
   // tRPC API
   app.use(
     "/api/trpc",
@@ -72,6 +85,11 @@ async function startServer() {
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Invalid PORT");
   server.on("error", error => { console.error("Server failed:", error.message); process.exit(1); });
   server.listen(port, "0.0.0.0", () => console.log(`Server listening on port ${port}`));
+}
+
+function getCsrfCookieOptions(req: express.Request) {
+  void req;
+  return { httpOnly: false, path: "/", sameSite: "none" as const, secure: true, maxAge: 30 * 24 * 60 * 60 * 1000 };
 }
 
 startServer().catch(error => { console.error(error); process.exit(1); });

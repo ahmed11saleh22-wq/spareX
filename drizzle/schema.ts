@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { boolean, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
 
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
@@ -24,9 +24,49 @@ export const workshops = mysqlTable("workshops", {
   address: text("address").notNull(),
   businessType: varchar("businessType", { length: 100 }).notNull(),
   monthlyVolume: varchar("monthlyVolume", { length: 80 }).notNull(),
+  specialties: text("specialties"),
+  warehouseDetails: text("warehouseDetails"),
+  warehouseCount: int("warehouseCount").default(0).notNull(),
   tradeLicense: varchar("tradeLicense", { length: 500 }),
   logo: varchar("logo", { length: 500 }),
-  approvalStatus: mysqlEnum("approvalStatus", ["pending", "approved", "rejected"]).default("pending").notNull(),
+  approvalStatus: mysqlEnum("approvalStatus", ["draft", "pending", "approved", "rejected"]).default("draft").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const registrationChallenges = mysqlTable("registration_challenges", {
+  id: int("id").autoincrement().primaryKey(),
+  challengeId: varchar("challengeId", { length: 80 }).notNull().unique(),
+  accountType: mysqlEnum("accountType", ["customer", "workshop"]).notNull(),
+  phone: varchar("phone", { length: 40 }).notNull(),
+  payload: text("payload").notNull(),
+  codeHash: varchar("codeHash", { length: 128 }).notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  attempts: int("attempts").default(0).notNull(),
+  verifiedAt: timestamp("verifiedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const authSessions = mysqlTable("auth_sessions", {
+  id: int("id").autoincrement().primaryKey(),
+  tokenHash: varchar("tokenHash", { length: 128 }).notNull().unique(),
+  userId: int("userId").notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  lastSeenAt: timestamp("lastSeenAt").defaultNow().notNull(),
+  userAgent: varchar("userAgent", { length: 255 }),
+  ipAddress: varchar("ipAddress", { length: 80 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const vehicles = mysqlTable("vehicles", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  make: varchar("make", { length: 100 }).notNull(),
+  model: varchar("model", { length: 120 }).notNull(),
+  year: int("year").notNull(),
+  trim: varchar("trim", { length: 120 }),
+  vin: varchar("vin", { length: 17 }),
+  isPrimary: boolean("isPrimary").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -106,6 +146,12 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Workshop = typeof workshops.$inferSelect;
 export type InsertWorkshop = typeof workshops.$inferInsert;
+export type RegistrationChallenge = typeof registrationChallenges.$inferSelect;
+export type InsertRegistrationChallenge = typeof registrationChallenges.$inferInsert;
+export type AuthSession = typeof authSessions.$inferSelect;
+export type InsertAuthSession = typeof authSessions.$inferInsert;
+export type Vehicle = typeof vehicles.$inferSelect;
+export type InsertVehicle = typeof vehicles.$inferInsert;
 export type Product = typeof products.$inferSelect;
 export type InsertProduct = typeof products.$inferInsert;
 export type Order = typeof orders.$inferSelect;

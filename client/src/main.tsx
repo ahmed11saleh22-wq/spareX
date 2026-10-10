@@ -43,6 +43,13 @@ const trpcClient = trpc.createClient({
       url: "/api/trpc",
       transformer: superjson,
       headers() {
+        const headers: Record<string, string> = {};
+        try {
+          const csrf = document.cookie.split(";").map(item => item.trim()).find(item => item.startsWith("sparex_csrf="))?.slice("sparex_csrf=".length);
+          if (csrf) headers["x-sparex-csrf"] = decodeURIComponent(csrf);
+        } catch {
+          // document.cookie may be unavailable in a restricted frame
+        }
         // Preview auto-login fallback: when the browser blocks iframe cookies
         // (Safari ITP / private browsing / WebView), the runtime mirrors the
         // session into sessionStorage so we can forward it as a Bearer token.
@@ -54,13 +61,13 @@ const trpcClient = trpc.createClient({
             const pair = raw.split(";").find(s => s.trim().startsWith(prefix));
             const token = pair?.trim().slice(prefix.length);
             if (token) {
-              return { Authorization: `Bearer ${token}` };
+              headers.Authorization = `Bearer ${token}`;
             }
           }
         } catch {
           // sessionStorage unavailable
         }
-        return {};
+        return headers;
       },
       fetch(input, init) {
         return globalThis.fetch(input, {
