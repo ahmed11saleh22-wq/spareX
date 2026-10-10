@@ -4,7 +4,11 @@ export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
+  phone: varchar("phone", { length: 40 }),
   email: varchar("email", { length: 320 }),
+  passwordHash: varchar("passwordHash", { length: 255 }),
+  accountType: mysqlEnum("accountType", ["customer", "workshop"]).default("customer").notNull(),
+  status: mysqlEnum("status", ["active", "pending", "suspended"]).default("active").notNull(),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -12,6 +16,20 @@ export const users = mysqlTable("users", {
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
 });
 
+export const workshops = mysqlTable("workshops", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  workshopName: varchar("workshopName", { length: 180 }).notNull(),
+  city: varchar("city", { length: 100 }).notNull(),
+  address: text("address").notNull(),
+  businessType: varchar("businessType", { length: 100 }).notNull(),
+  monthlyVolume: varchar("monthlyVolume", { length: 80 }).notNull(),
+  tradeLicense: varchar("tradeLicense", { length: 500 }),
+  logo: varchar("logo", { length: 500 }),
+  approvalStatus: mysqlEnum("approvalStatus", ["pending", "approved", "rejected"]).default("pending").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
 export const products = mysqlTable("products", {
   id: int("id").autoincrement().primaryKey(),
   sku: varchar("sku", { length: 80 }).notNull().unique(),
@@ -86,6 +104,8 @@ export const shipmentEvents = mysqlTable("shipment_events", {
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
+export type Workshop = typeof workshops.$inferSelect;
+export type InsertWorkshop = typeof workshops.$inferInsert;
 export type Product = typeof products.$inferSelect;
 export type InsertProduct = typeof products.$inferInsert;
 export type Order = typeof orders.$inferSelect;
