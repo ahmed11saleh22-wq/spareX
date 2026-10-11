@@ -78,6 +78,13 @@
       "when": 1791695320391,
       "tag": "0010_solid_ironclad",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1791700899249,
+      "tag": "0011_handy_puck",
+      "breakpoints": true
     }
   ]
 }

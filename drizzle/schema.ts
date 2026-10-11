@@ -165,6 +165,22 @@ export const workshopPricingProfiles = mysqlTable("workshop_pricing_profiles", {
   id: int("id").autoincrement().primaryKey(), workshopId: int("workshopId").notNull().references(() => workshops.id), pricingLevel: mysqlEnum("pricingLevel", ["Bronze", "Silver", "Gold", "Platinum"]).notNull(), discountPercentage: int("discountPercentage").default(0).notNull(), minimumOrder: int("minimumOrder").default(0).notNull(), creditEnabled: boolean("creditEnabled").default(false).notNull(), creditLimit: int("creditLimit").default(0).notNull(), paymentTermsDays: int("paymentTermsDays").default(0).notNull(), createdAt: timestamp("createdAt").defaultNow().notNull(), updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (table) => ({ uniquePricing: uniqueIndex("workshop_pricing_workshop_unique").on(table.workshopId) }));
 
+export const walletTransactions = mysqlTable("wallet_transactions", {
+  id: int("id").autoincrement().primaryKey(),
+  transactionNumber: varchar("transactionNumber", { length: 50 }).notNull().unique(),
+  userId: int("userId").notNull().references(() => users.id),
+  workshopId: int("workshopId").references(() => workshops.id),
+  ledgerType: mysqlEnum("ledgerType", ["wallet", "credit"]).notNull(),
+  transactionType: varchar("transactionType", { length: 80 }).notNull(),
+  amount: int("amount").default(0).notNull(),
+  walletBalanceAfter: int("walletBalanceAfter"),
+  creditBalanceAfter: int("creditBalanceAfter"),
+  creditLimitAfter: int("creditLimitAfter"),
+  description: varchar("description", { length: 255 }).notNull(),
+  actorUserId: int("actorUserId").references(() => users.id),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({ userLedgerIndex: index("wallet_transactions_user_idx").on(table.userId, table.createdAt), workshopLedgerIndex: index("wallet_transactions_workshop_idx").on(table.workshopId, table.createdAt) }));
+
 export const otpCodes = mysqlTable("otp_codes", {
   id: int("id").autoincrement().primaryKey(), userIdentifier: varchar("userIdentifier", { length: 320 }).notNull(), purpose: varchar("purpose", { length: 60 }).notNull(), codeHash: varchar("codeHash", { length: 128 }).notNull(), expiresAt: timestamp("expiresAt").notNull(), attempts: int("attempts").default(0).notNull(), usedAt: timestamp("usedAt"), createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (table) => ({ lookupIndex: index("otp_codes_lookup_idx").on(table.userIdentifier, table.purpose, table.createdAt) }));

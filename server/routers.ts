@@ -71,6 +71,7 @@ export const appRouter = router({
       try { return await account.changePassword(ctx.user.id, input.currentPassword, input.newPassword); }
       catch (error) { throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "تعذر تغيير كلمة المرور" }); }
     }),
+    financialTransactions: protectedProcedure.query(({ ctx }) => account.listFinancialTransactions(ctx.user.id)),
     logoutAllSessions: protectedProcedure.mutation(({ ctx }) => account.logoutAllOtherSessions(ctx.user.id)),
     workshop: router({
       status: protectedProcedure.query(({ ctx }) => account.getWorkshopStatus(ctx.user.id)),

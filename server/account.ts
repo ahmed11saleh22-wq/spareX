@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { and, desc, eq, or } from "drizzle-orm";
-import { auditLogs, authSessions, loginAttempts, notifications, passwordResetChallenges, registrationChallenges, userConsents, users, vehicles, workshops, workshopDocuments } from "../drizzle/schema";
+import { auditLogs, authSessions, loginAttempts, notifications, passwordResetChallenges, registrationChallenges, userConsents, users, vehicles, workshops, workshopDocuments, walletTransactions } from "../drizzle/schema";
 import { getDb } from "./db";
 import { hashOtp, hashPassword, normalizePhone, safeUser, verifyPassword } from "./self-auth";
 import { storagePut } from "./storage";
@@ -356,8 +356,27 @@ export async function updateWorkshopPricing(id: number, input: { workshopLevel?:
   await db.transaction(async (tx) => {
     await tx.update(workshops).set({ ...input, creditAllowed: effectiveCredit, creditLimit: effectiveCredit ? effectiveLimit : 0, paymentTermDays: effectiveCredit ? effectiveTerms : 0, updatedAt: new Date() }).where(eq(workshops.id, id));
     await tx.insert(auditLogs).values({ actorUserId: actorUserId ?? null, action: "workshop_pricing_updated", entityType: "workshop", entityId: id, oldValues: JSON.stringify({ workshopLevel: current.workshopLevel, discountPercent: current.discountPercent, creditAllowed: current.creditAllowed, creditLimit: current.creditLimit, paymentTermDays: current.paymentTermDays }), newValues: JSON.stringify(input) });
+    if (input.creditAllowed !== undefined || input.creditLimit !== undefined || input.paymentTermDays !== undefined) {
+      await tx.insert(walletTransactions).values({
+        transactionNumber: `CR-${randomUUID()}`,
+        userId: current.userId,
+        workshopId: id,
+        ledgerType: "credit",
+        transactionType: "credit_terms_updated",
+        amount: 0,
+        creditBalanceAfter: effectiveCredit ? 0 : null,
+        creditLimitAfter: effectiveCredit ? effectiveLimit : 0,
+        description: effectiveCredit ? `تفعيل حد ائتماني بقيمة ${effectiveLimit} ر.س لمدة ${effectiveTerms} يوماً` : "إيقاف الرصيد الائتماني",
+        actorUserId: actorUserId ?? null,
+      });
+    }
   });
   return { success: true };
+}
+
+export async function listFinancialTransactions(userId: number) {
+  const db = await requireDatabase();
+  return db.select().from(walletTransactions).where(eq(walletTransactions.userId, userId)).orderBy(desc(walletTransactions.createdAt)).limit(100);
 }
 
 export async function logoutAllOtherSessions(userId: number, currentTokenHash?: string) {
