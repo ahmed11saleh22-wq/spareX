@@ -1,12 +1,16 @@
-import { boolean, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { boolean, int, index, mysqlEnum, mysqlTable, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   phone: varchar("phone", { length: 40 }),
+  phoneCountryCode: varchar("phoneCountryCode", { length: 8 }),
+  phoneVerifiedAt: timestamp("phoneVerifiedAt"),
   email: varchar("email", { length: 320 }),
+  emailVerifiedAt: timestamp("emailVerifiedAt"),
   passwordHash: varchar("passwordHash", { length: 255 }),
+  marketingConsent: boolean("marketingConsent").default(false).notNull(),
   accountType: mysqlEnum("accountType", ["customer", "workshop"]).default("customer").notNull(),
   status: mysqlEnum("status", ["active", "pending", "suspended"]).default("active").notNull(),
   loginMethod: varchar("loginMethod", { length: 64 }),
@@ -14,11 +18,12 @@ export const users = mysqlTable("users", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
-});
+}, (table) => ({ emailUnique: uniqueIndex("users_email_unique").on(table.email), phoneUnique: uniqueIndex("users_phone_unique").on(table.phone) }));
 
 export const workshops = mysqlTable("workshops", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
+  ownerUserId: int("ownerUserId"),
   workshopName: varchar("workshopName", { length: 180 }).notNull(),
   workshopNameEn: varchar("workshopNameEn", { length: 180 }),
   managerName: varchar("managerName", { length: 180 }),
@@ -58,9 +63,11 @@ export const workshops = mysqlTable("workshops", {
   paymentTermDays: int("paymentTermDays"),
   creditAllowed: boolean("creditAllowed").default(false).notNull(),
   approvalStatus: mysqlEnum("approvalStatus", ["draft", "pending", "approved", "rejected", "suspended", "requires_changes"]).default("draft").notNull(),
+  approvedBy: int("approvedBy"),
+  approvedAt: timestamp("approvedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, (table) => ({ ownerIndex: index("workshops_owner_idx").on(table.userId), statusIndex: index("workshops_status_idx").on(table.approvalStatus), phoneIndex: index("workshops_phone_idx").on(table.phone) }));
 
 export const registrationChallenges = mysqlTable("registration_challenges", {
   id: int("id").autoincrement().primaryKey(),
@@ -137,6 +144,34 @@ export const workshopEmployees = mysqlTable("workshop_employees", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
+
+export const workshopServices = mysqlTable("workshop_services", {
+  id: int("id").autoincrement().primaryKey(), workshopId: int("workshopId").notNull().references(() => workshops.id), serviceType: varchar("serviceType", { length: 120 }).notNull(), createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({ uniqueService: uniqueIndex("workshop_service_unique").on(table.workshopId, table.serviceType), workshopIndex: index("workshop_services_workshop_idx").on(table.workshopId) }));
+
+export const workshopSpecializations = mysqlTable("workshop_specializations", {
+  id: int("id").autoincrement().primaryKey(), workshopId: int("workshopId").notNull().references(() => workshops.id), specialization: varchar("specialization", { length: 120 }).notNull(), createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({ uniqueSpecialization: uniqueIndex("workshop_specialization_unique").on(table.workshopId, table.specialization), workshopIndex: index("workshop_specializations_workshop_idx").on(table.workshopId) }));
+
+export const workshopDocuments = mysqlTable("workshop_documents", {
+  id: int("id").autoincrement().primaryKey(), workshopId: int("workshopId").notNull().references(() => workshops.id), documentType: varchar("documentType", { length: 80 }).notNull(), filePath: varchar("filePath", { length: 500 }).notNull(), fileName: varchar("fileName", { length: 255 }).notNull(), mimeType: varchar("mimeType", { length: 120 }).notNull(), fileSize: int("fileSize").notNull(), verificationStatus: mysqlEnum("verificationStatus", ["pending", "verified", "rejected"]).default("pending").notNull(), uploadedAt: timestamp("uploadedAt").defaultNow().notNull(),
+}, (table) => ({ workshopIndex: index("workshop_documents_workshop_idx").on(table.workshopId), typeIndex: index("workshop_documents_type_idx").on(table.documentType) }));
+
+export const workshopMembers = mysqlTable("workshop_members", {
+  id: int("id").autoincrement().primaryKey(), workshopId: int("workshopId").notNull().references(() => workshops.id), userId: int("userId").notNull().references(() => users.id), role: mysqlEnum("role", ["owner", "employee"]).default("employee").notNull(), permissions: text("permissions").notNull(), status: mysqlEnum("status", ["invited", "active", "disabled"]).default("invited").notNull(), createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({ uniqueMember: uniqueIndex("workshop_member_unique").on(table.workshopId, table.userId), workshopIndex: index("workshop_members_workshop_idx").on(table.workshopId) }));
+
+export const workshopPricingProfiles = mysqlTable("workshop_pricing_profiles", {
+  id: int("id").autoincrement().primaryKey(), workshopId: int("workshopId").notNull().references(() => workshops.id), pricingLevel: mysqlEnum("pricingLevel", ["Bronze", "Silver", "Gold", "Platinum"]).notNull(), discountPercentage: int("discountPercentage").default(0).notNull(), minimumOrder: int("minimumOrder").default(0).notNull(), creditEnabled: boolean("creditEnabled").default(false).notNull(), creditLimit: int("creditLimit").default(0).notNull(), paymentTermsDays: int("paymentTermsDays").default(0).notNull(), createdAt: timestamp("createdAt").defaultNow().notNull(), updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({ uniquePricing: uniqueIndex("workshop_pricing_workshop_unique").on(table.workshopId) }));
+
+export const otpCodes = mysqlTable("otp_codes", {
+  id: int("id").autoincrement().primaryKey(), userIdentifier: varchar("userIdentifier", { length: 320 }).notNull(), purpose: varchar("purpose", { length: 60 }).notNull(), codeHash: varchar("codeHash", { length: 128 }).notNull(), expiresAt: timestamp("expiresAt").notNull(), attempts: int("attempts").default(0).notNull(), usedAt: timestamp("usedAt"), createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({ lookupIndex: index("otp_codes_lookup_idx").on(table.userIdentifier, table.purpose, table.createdAt) }));
+
+export const auditLogs = mysqlTable("audit_logs", {
+  id: int("id").autoincrement().primaryKey(), actorUserId: int("actorUserId").references(() => users.id), action: varchar("action", { length: 120 }).notNull(), entityType: varchar("entityType", { length: 80 }).notNull(), entityId: int("entityId"), oldValues: text("oldValues"), newValues: text("newValues"), createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({ entityIndex: index("audit_logs_entity_idx").on(table.entityType, table.entityId), actorIndex: index("audit_logs_actor_idx").on(table.actorUserId) }));
 
 export const vehicles = mysqlTable("vehicles", {
   id: int("id").autoincrement().primaryKey(),

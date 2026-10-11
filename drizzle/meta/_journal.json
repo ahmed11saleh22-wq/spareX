@@ -64,6 +64,20 @@
       "when": 1791692229850,
       "tag": "0008_slow_red_skull",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1791695268413,
+      "tag": "0009_flat_rawhide_kid",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1791695320391,
+      "tag": "0010_solid_ironclad",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,7 @@
+ALTER TABLE `audit_logs` ADD CONSTRAINT `audit_logs_actorUserId_users_id_fk` FOREIGN KEY (`actorUserId`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `workshop_documents` ADD CONSTRAINT `workshop_documents_workshopId_workshops_id_fk` FOREIGN KEY (`workshopId`) REFERENCES `workshops`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `workshop_members` ADD CONSTRAINT `workshop_members_workshopId_workshops_id_fk` FOREIGN KEY (`workshopId`) REFERENCES `workshops`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `workshop_members` ADD CONSTRAINT `workshop_members_userId_users_id_fk` FOREIGN KEY (`userId`) REFERENCES `users`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `workshop_pricing_profiles` ADD CONSTRAINT `workshop_pricing_profiles_workshopId_workshops_id_fk` FOREIGN KEY (`workshopId`) REFERENCES `workshops`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `workshop_services` ADD CONSTRAINT `workshop_services_workshopId_workshops_id_fk` FOREIGN KEY (`workshopId`) REFERENCES `workshops`(`id`) ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE `workshop_specializations` ADD CONSTRAINT `workshop_specializations_workshopId_workshops_id_fk` FOREIGN KEY (`workshopId`) REFERENCES `workshops`(`id`) ON DELETE no action ON UPDATE no action;

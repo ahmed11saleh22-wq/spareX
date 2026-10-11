@@ -59,6 +59,10 @@ export const appRouter = router({
   }),
 
   account: router({
+    updateProfile: protectedProcedure.input(z.object({ name: z.string().min(2).max(180), email: z.string().email().max(320), phone: z.string().min(8).max(40) })).mutation(async ({ input, ctx }) => {
+      try { return await account.updateCustomerProfile(ctx.user.id, input); }
+      catch (error) { throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "تعذر تحديث بيانات الحساب" }); }
+    }),
     notifications: router({
       list: protectedProcedure.query(({ ctx }) => account.listNotifications(ctx.user.id)),
       markRead: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ input, ctx }) => account.markNotificationRead(ctx.user.id, input.id)),
@@ -68,6 +72,24 @@ export const appRouter = router({
       catch (error) { throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "تعذر تغيير كلمة المرور" }); }
     }),
     logoutAllSessions: protectedProcedure.mutation(({ ctx }) => account.logoutAllOtherSessions(ctx.user.id)),
+    workshop: router({
+      status: protectedProcedure.query(({ ctx }) => account.getWorkshopStatus(ctx.user.id)),
+      updateProfile: protectedProcedure.input(z.object({ workshopId: z.number().int().positive(), workshopName: z.string().min(2).max(180), city: z.string().min(2).max(100), district: z.string().max(120).optional(), address: z.string().min(4).max(1000), whatsapp: z.string().max(40).optional(), notes: z.string().max(3000).optional() })).mutation(async ({ input, ctx }) => {
+        try { return await account.updateWorkshopProfile(ctx.user.id, input); }
+        catch (error) { throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "تعذر تحديث بيانات الورشة" }); }
+      }),
+      documents: router({
+        list: protectedProcedure.input(z.object({ workshopId: z.number().int().positive() })).query(({ input, ctx }) => account.listWorkshopDocuments(ctx.user.id, input.workshopId)),
+        upload: protectedProcedure.input(z.object({ workshopId: z.number().int().positive(), documentType: z.string().min(2).max(80), fileName: z.string().min(1).max(255), dataUrl: z.string().max(8000000) })).mutation(async ({ input, ctx }) => {
+          try { return await account.uploadWorkshopDocument(ctx.user.id, input); }
+          catch (error) { throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "تعذر رفع المستند" }); }
+        }),
+        delete: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ input, ctx }) => {
+          try { return await account.deleteWorkshopDocument(ctx.user.id, input.id); }
+          catch (error) { throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "تعذر حذف المستند" }); }
+        }),
+      }),
+    }),
     vehicles: router({
       list: protectedProcedure.query(({ ctx }) => account.listVehicles(ctx.user.id)),
       save: protectedProcedure.input(z.object({ id: z.number().int().positive().optional(), make: z.string().min(2).max(100), model: z.string().min(1).max(120), year: z.number().int().min(1950).max(2100), trim: z.string().max(120).optional(), vin: z.string().max(17).optional(), isPrimary: z.boolean().optional() })).mutation(({ input, ctx }) => account.saveVehicle(ctx.user.id, input)),
@@ -117,7 +139,7 @@ export const appRouter = router({
     updateOrderStatus: adminProcedure.input(z.object({ orderNumber: z.string().min(1), status: z.enum(["new", "processing", "shipped", "completed", "cancelled"]) })).mutation(({ input }) => db.updateOrderStatus(input.orderNumber, input.status)),
     updateShipment: adminProcedure.input(z.object({ orderNumber: z.string().min(1), shippingStatus: z.enum(["pending", "preparing", "shipped", "in_transit", "out_for_delivery", "delivered", "exception"]), carrier: z.string().max(80).optional(), trackingNumber: z.string().max(120).optional(), estimatedDelivery: z.string().max(120).optional(), title: z.string().min(2).max(180), description: z.string().max(500).optional(), location: z.string().max(180).optional() })).mutation(({ input }) => db.updateShipment(input)),
     listWorkshopApplications: adminProcedure.query(() => account.listWorkshopApplications()),
-    updateWorkshopApproval: adminProcedure.input(z.object({ id: z.number().int().positive(), approvalStatus: z.enum(["approved", "rejected", "pending", "suspended", "requires_changes"]), rejectionReason: z.string().max(2000).optional(), changeFields: z.array(z.string().max(100)).max(30).optional(), reapplyAllowed: z.boolean().optional(), internalNotes: z.string().max(3000).optional() })).mutation(({ input }) => account.updateWorkshopApproval(input.id, input.approvalStatus, input)),
+    updateWorkshopApproval: adminProcedure.input(z.object({ id: z.number().int().positive(), approvalStatus: z.enum(["approved", "rejected", "pending", "suspended", "requires_changes"]), rejectionReason: z.string().max(2000).optional(), changeFields: z.array(z.string().max(100)).max(30).optional(), reapplyAllowed: z.boolean().optional(), internalNotes: z.string().max(3000).optional() })).mutation(({ input, ctx }) => account.updateWorkshopApproval(input.id, input.approvalStatus, input, ctx.user.id)),
     updateWorkshopPricing: adminProcedure.input(z.object({ id: z.number().int().positive(), workshopLevel: z.enum(["Bronze", "Silver", "Gold", "Platinum"]).optional(), discountPercent: z.number().int().min(0).max(90).optional(), priceListId: z.string().max(80).optional(), minOrderAmount: z.number().int().min(0).optional(), creditLimit: z.number().int().min(0).optional(), paymentTermDays: z.number().int().min(0).max(365).optional(), creditAllowed: z.boolean().optional() })).mutation(({ input }) => account.updateWorkshopPricing(input.id, input)),
   }),
 

@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { and, desc, eq, or } from "drizzle-orm";
-import { authSessions, loginAttempts, notifications, passwordResetChallenges, registrationChallenges, userConsents, users, vehicles, workshops } from "../drizzle/schema";
+import { auditLogs, authSessions, loginAttempts, notifications, passwordResetChallenges, registrationChallenges, userConsents, users, vehicles, workshops, workshopDocuments } from "../drizzle/schema";
 import { getDb } from "./db";
 import { hashOtp, hashPassword, normalizePhone, safeUser, verifyPassword } from "./self-auth";
 import { storagePut } from "./storage";
@@ -328,14 +328,15 @@ export async function listWorkshopApplications() {
   return db.select({ workshop: workshops, user: users }).from(workshops).innerJoin(users, eq(workshops.userId, users.id)).orderBy(desc(workshops.createdAt));
 }
 
-export async function updateWorkshopApproval(id: number, approvalStatus: "approved" | "rejected" | "pending" | "suspended" | "requires_changes", details: { rejectionReason?: string; changeFields?: string[]; reapplyAllowed?: boolean; internalNotes?: string } = {}) {
+export async function updateWorkshopApproval(id: number, approvalStatus: "approved" | "rejected" | "pending" | "suspended" | "requires_changes", details: { rejectionReason?: string; changeFields?: string[]; reapplyAllowed?: boolean; internalNotes?: string } = {}, actorUserId?: number) {
   const db = await requireDatabase();
   const rows = await db.select({ userId: workshops.userId }).from(workshops).where(eq(workshops.id, id)).limit(1);
   const workshop = rows[0];
   if (!workshop) throw new Error("طلب الورشة غير موجود");
   await db.transaction(async (tx) => {
-    await tx.update(workshops).set({ approvalStatus, rejectionReason: details.rejectionReason ?? null, changeFields: details.changeFields ? JSON.stringify(details.changeFields) : null, reapplyAllowed: details.reapplyAllowed ?? false, internalNotes: details.internalNotes ?? null, updatedAt: new Date() }).where(eq(workshops.id, id));
+    await tx.update(workshops).set({ approvalStatus, rejectionReason: details.rejectionReason ?? null, changeFields: details.changeFields ? JSON.stringify(details.changeFields) : null, reapplyAllowed: details.reapplyAllowed ?? false, internalNotes: details.internalNotes ?? null, approvedBy: approvalStatus === "approved" ? actorUserId ?? null : null, approvedAt: approvalStatus === "approved" ? new Date() : null, updatedAt: new Date() }).where(eq(workshops.id, id));
     await tx.update(users).set({ status: approvalStatus === "suspended" ? "suspended" : "active", updatedAt: new Date() }).where(eq(users.id, workshop.userId));
+    await tx.insert(auditLogs).values({ actorUserId: actorUserId ?? null, action: `workshop_${approvalStatus}`, entityType: "workshop", entityId: id, oldValues: JSON.stringify({ userId: workshop.userId }), newValues: JSON.stringify({ approvalStatus, rejectionReason: details.rejectionReason ?? null }) });
   });
   return { success: true };
 }
@@ -364,5 +365,68 @@ export async function changePassword(userId: number, currentPassword: string, ne
     await tx.delete(authSessions).where(eq(authSessions.userId, userId));
     await tx.insert(notifications).values({ userId, type: "password_changed", title: "تم تغيير كلمة المرور", message: "تم تغيير كلمة المرور وتسجيل الخروج من الجلسات القديمة." });
   });
+  return { success: true };
+}
+
+
+async function ownedWorkshop(userId: number, workshopId?: number) {
+  const db = await requireDatabase();
+  const rows = await db.select().from(workshops).where(workshopId ? and(eq(workshops.id, workshopId), eq(workshops.userId, userId)) : eq(workshops.userId, userId)).limit(1);
+  if (!rows[0]) throw new Error("لا تملك صلاحية الوصول إلى بيانات الورشة");
+  return { db, workshop: rows[0] };
+}
+
+export async function getWorkshopStatus(userId: number) {
+  const { workshop } = await ownedWorkshop(userId);
+  return { id: workshop.id, approvalStatus: workshop.approvalStatus, rejectionReason: workshop.rejectionReason, changeFields: workshop.changeFields, reapplyAllowed: workshop.reapplyAllowed, workshopName: workshop.workshopName };
+}
+
+export async function listWorkshopDocuments(userId: number, workshopId: number) {
+  const { db } = await ownedWorkshop(userId, workshopId);
+  return db.select().from(workshopDocuments).where(eq(workshopDocuments.workshopId, workshopId)).orderBy(desc(workshopDocuments.uploadedAt));
+}
+
+export async function uploadWorkshopDocument(userId: number, input: { workshopId: number; documentType: string; fileName: string; dataUrl: string }) {
+  const { db, workshop } = await ownedWorkshop(userId, input.workshopId);
+  if (!/^[a-zA-Z0-9_. -]{1,255}$/.test(input.fileName)) throw new Error("اسم الملف غير صالح");
+  const storedPath = await persistRegistrationAsset(input.dataUrl, `${workshop.id}/${randomUUID()}`, "document");
+  if (!storedPath || storedPath.startsWith("data:")) throw new Error("تعذر حفظ المستند في التخزين الآمن");
+  const match = input.dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  const bytes = match ? Buffer.from(match[2], "base64") : Buffer.alloc(0);
+  const mimeType = match?.[1] ?? "application/octet-stream";
+  const created = await db.insert(workshopDocuments).values({ workshopId: workshop.id, documentType: input.documentType, filePath: storedPath, fileName: input.fileName, mimeType, fileSize: bytes.byteLength, verificationStatus: "pending" });
+  return { id: Number(created[0].insertId), filePath: storedPath };
+}
+
+export async function deleteWorkshopDocument(userId: number, documentId: number) {
+  const { db, workshop } = await ownedWorkshop(userId);
+  const rows = await db.select({ id: workshopDocuments.id }).from(workshopDocuments).where(and(eq(workshopDocuments.id, documentId), eq(workshopDocuments.workshopId, workshop.id))).limit(1);
+  if (!rows[0]) throw new Error("المستند غير موجود");
+  await db.delete(workshopDocuments).where(eq(workshopDocuments.id, documentId));
+  return { success: true, note: "تم إخفاء سجل المستند. الحذف الفيزيائي من التخزين يحتاج صلاحية المشغل." };
+}
+
+
+export async function updateCustomerProfile(userId: number, input: { name: string; email: string; phone: string }) {
+  const db = await requireDatabase();
+  const email = input.email.trim().toLowerCase();
+  const phone = normalizePhone(input.phone);
+  if (input.name.trim().length < 2) throw new Error("أدخل الاسم الكامل");
+  if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error("البريد الإلكتروني غير صحيح");
+  if (!/^\+\d{8,15}$/.test(phone)) throw new Error("رقم الهاتف غير صحيح");
+  const duplicate = await db.select({ id: users.id }).from(users).where(and(or(eq(users.email, email), eq(users.phone, phone)), eq(users.id, userId))).limit(1);
+  if (duplicate.length === 0) {
+    const existing = await db.select({ id: users.id }).from(users).where(or(eq(users.email, email), eq(users.phone, phone))).limit(1);
+    if (existing.length && existing[0].id !== userId) throw new Error("البريد الإلكتروني أو رقم الهاتف مستخدم مسبقاً");
+  }
+  await db.update(users).set({ name: input.name.trim(), email, phone, updatedAt: new Date() }).where(eq(users.id, userId));
+  await db.insert(notifications).values({ userId, type: "profile_changed", title: "تم تحديث بيانات الحساب", message: "تم حفظ بيانات التواصل الجديدة." });
+  return { success: true };
+}
+
+export async function updateWorkshopProfile(userId: number, input: { workshopId: number; workshopName: string; city: string; district?: string; address: string; whatsapp?: string; notes?: string }) {
+  const { db, workshop } = await ownedWorkshop(userId, input.workshopId);
+  if (input.workshopName.trim().length < 2 || input.city.trim().length < 2 || input.address.trim().length < 4) throw new Error("اسم الورشة والمدينة والعنوان مطلوبة");
+  await db.update(workshops).set({ workshopName: input.workshopName.trim(), city: input.city.trim(), district: input.district?.trim() || null, address: input.address.trim(), whatsapp: input.whatsapp?.trim() || null, notes: input.notes?.trim() || null, approvalStatus: workshop.approvalStatus === "approved" ? "approved" : "pending", updatedAt: new Date() }).where(eq(workshops.id, workshop.id));
   return { success: true };
 }
