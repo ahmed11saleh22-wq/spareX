@@ -53,12 +53,13 @@ export function safeUser(user: User) {
   return publicUser;
 }
 
-export async function createSelfSession(userId: number, request: Request, response: Response) {
+export async function createSelfSession(userId: number, request: Request, response: Response, rememberMe = true) {
   const db = await getDb();
   if (!db) throw new Error("Database is not available");
   const token = randomBytes(32).toString("base64url");
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + SELF_SESSION_DAYS * 24 * 60 * 60 * 1000);
+  const sessionDays = rememberMe ? SELF_SESSION_DAYS : 1;
+  const expiresAt = new Date(now.getTime() + sessionDays * 24 * 60 * 60 * 1000);
   await db.insert(authSessions).values({
     tokenHash: hashSessionToken(token),
     userId,
@@ -66,7 +67,7 @@ export async function createSelfSession(userId: number, request: Request, respon
     userAgent: request.get("user-agent")?.slice(0, 255) ?? null,
     ipAddress: request.ip?.slice(0, 80) ?? null,
   });
-  response.cookie(SELF_SESSION_COOKIE, token, { ...getSessionCookieOptions(request), maxAge: SELF_SESSION_DAYS * 24 * 60 * 60 * 1000 });
+  response.cookie(SELF_SESSION_COOKIE, token, { ...getSessionCookieOptions(request), maxAge: sessionDays * 24 * 60 * 60 * 1000 });
   return token;
 }
 

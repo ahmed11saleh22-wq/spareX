@@ -13,17 +13,8 @@ export const publicProcedure = t.procedure;
 
 const requireUser = t.middleware(async opts => {
   const { ctx, next } = opts;
-
-  if (!ctx.user) {
-    throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
-  }
-
-  return next({
-    ctx: {
-      ...ctx,
-      user: ctx.user,
-    },
-  });
+  if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
+  return next({ ctx: { ...ctx, user: ctx.user } });
 });
 
 export const protectedProcedure = t.procedure.use(requireUser);
@@ -31,19 +22,27 @@ export const protectedProcedure = t.procedure.use(requireUser);
 export const adminProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
-
-    // The project owner is an administrator even if their pre-existing user row
-    // was created before OWNER_OPEN_ID was configured and still has role="user".
     const isOwner = Boolean(ENV.ownerOpenId) && ctx.user?.openId === ENV.ownerOpenId;
-    if (!ctx.user || (ctx.user.role !== 'admin' && !isOwner)) {
+    if (!ctx.user || (!["admin", "super_admin"].includes(ctx.user.role) && !isOwner)) {
       throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
     }
+    return next({ ctx: { ...ctx, user: ctx.user } });
+  }),
+);
 
-    return next({
-      ctx: {
-        ...ctx,
-        user: ctx.user,
-      },
-    });
+export const superAdminProcedure = t.procedure.use(
+  t.middleware(async opts => {
+    const { ctx, next } = opts;
+    const isOwner = Boolean(ENV.ownerOpenId) && ctx.user?.openId === ENV.ownerOpenId;
+    if (!ctx.user || (ctx.user.role !== "super_admin" && !isOwner)) throw new TRPCError({ code: "FORBIDDEN", message: "لا تملك صلاحية المدير الأعلى" });
+    return next({ ctx: { ...ctx, user: ctx.user } });
+  }),
+);
+
+export const workshopProcedure = t.procedure.use(
+  t.middleware(async opts => {
+    const { ctx, next } = opts;
+    if (!ctx.user || !["workshop_owner", "workshop_employee", "admin", "super_admin"].includes(ctx.user.role)) throw new TRPCError({ code: "FORBIDDEN", message: "هذه الخدمة مخصصة لحسابات الورش" });
+    return next({ ctx: { ...ctx, user: ctx.user } });
   }),
 );

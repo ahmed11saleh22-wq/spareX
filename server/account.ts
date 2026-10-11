@@ -1,6 +1,6 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { and, desc, eq, or } from "drizzle-orm";
-import { authSessions, registrationChallenges, users, vehicles, workshops } from "../drizzle/schema";
+import { authSessions, loginAttempts, notifications, passwordResetChallenges, registrationChallenges, userConsents, users, vehicles, workshops } from "../drizzle/schema";
 import { getDb } from "./db";
 import { hashOtp, hashPassword, normalizePhone, safeUser, verifyPassword } from "./self-auth";
 import { storagePut } from "./storage";
@@ -12,6 +12,7 @@ export type RegistrationInput = {
   email: string;
   password: string;
   termsAccepted: boolean;
+  marketingAccepted?: boolean;
   workshopName?: string;
   workshopNameEn?: string;
   managerName?: string;
@@ -155,11 +156,18 @@ export async function verifyRegistration(challengeId: string, code: string) {
       accountType: payload.accountType,
       status: payload.accountType === "workshop" ? "pending" : "active",
       loginMethod: "password",
-      role: "user",
+      role: payload.accountType === "workshop" ? "workshop_owner" : "user",
     });
+    const insertedUser = (await tx.select({ id: users.id }).from(users).where(eq(users.openId, openId)).limit(1))[0];
+    if (!insertedUser) throw new Error("تعذر إنشاء الحساب");
+    await tx.insert(userConsents).values([
+      { userId: insertedUser.id, consentType: "terms_privacy", accepted: true, policyVersion: "2026-10" },
+      { userId: insertedUser.id, consentType: "marketing", accepted: Boolean(payload.marketingAccepted), policyVersion: "2026-10" },
+    ]);
+    await tx.insert(notifications).values({ userId: insertedUser.id, type: "account_created", title: "تم إنشاء الحساب", message: "تم إنشاء حسابك في سبير إكس بنجاح." });
     if (payload.accountType === "workshop") {
       await tx.insert(workshops).values({
-        userId: (await tx.select({ id: users.id }).from(users).where(eq(users.openId, openId)).limit(1))[0]!.id,
+        userId: insertedUser.id,
         workshopName: payload.workshopName!,
         workshopNameEn: payload.workshopNameEn ?? null,
         managerName: payload.managerName ?? payload.name,
@@ -198,15 +206,84 @@ export async function verifyRegistration(challengeId: string, code: string) {
   return safeUser(user);
 }
 
-export async function loginWithPassword(identifier: string, password: string) {
+const loginWindows = new Map<string, { count: number; startedAt: number }>();
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const MAX_LOGIN_ATTEMPTS = 8;
+
+function identifierKey(identifier: string) {
+  return createHash("sha256").update(identifier.trim().toLowerCase()).digest("hex");
+}
+
+async function recordLoginAttempt(db: Awaited<ReturnType<typeof getDb>>, identifier: string, success: boolean, ipAddress?: string, reason?: string) {
+  if (!db) return;
+  await db.insert(loginAttempts).values({ identifierHash: identifierKey(identifier), ipAddress: ipAddress?.slice(0, 80) ?? null, success, reason: reason ?? null });
+}
+
+export async function loginWithPassword(identifier: string, password: string, ipAddress?: string) {
   const db = await requireDatabase();
+  const key = identifierKey(identifier);
+  const current = loginWindows.get(key);
+  if (current && Date.now() - current.startedAt < LOGIN_WINDOW_MS && current.count >= MAX_LOGIN_ATTEMPTS) throw new Error("محاولات الدخول كثيرة. حاول بعد قليل");
+  if (!current || Date.now() - current.startedAt >= LOGIN_WINDOW_MS) loginWindows.set(key, { count: 0, startedAt: Date.now() });
   const normalized = identifier.includes("@") ? identifier.trim().toLowerCase() : normalizePhone(identifier);
   const rows = await db.select().from(users).where(or(eq(users.email, normalized), eq(users.phone, normalized))).limit(1);
   const user = rows[0];
-  if (!user || !(await verifyPassword(password, user.passwordHash))) throw new Error("بيانات الدخول غير صحيحة");
-  if (user.status === "suspended") throw new Error("هذا الحساب موقوف، تواصل مع الدعم");
+  if (!user || !(await verifyPassword(password, user.passwordHash))) {
+    const window = loginWindows.get(key)!; window.count += 1;
+    await recordLoginAttempt(db, identifier, false, ipAddress, "invalid_credentials");
+    throw new Error("بيانات الدخول غير صحيحة");
+  }
+  if (user.status === "suspended") {
+    await recordLoginAttempt(db, identifier, false, ipAddress, "suspended");
+    throw new Error("هذا الحساب موقوف، تواصل مع الدعم");
+  }
+  loginWindows.delete(key);
+  await recordLoginAttempt(db, identifier, true, ipAddress, "success");
   await db.update(users).set({ lastSignedIn: new Date() }).where(eq(users.id, user.id));
   return safeUser({ ...user, lastSignedIn: new Date() });
+}
+
+export async function startPasswordReset(identifier: string) {
+  const db = await requireDatabase();
+  const normalized = identifier.includes("@") ? identifier.trim().toLowerCase() : normalizePhone(identifier);
+  const channel = identifier.includes("@") ? "email" : "phone";
+  const rows = await db.select({ id: users.id, phone: users.phone, email: users.email }).from(users).where(or(eq(users.email, normalized), eq(users.phone, normalized))).limit(1);
+  const challengeId = randomBytes(24).toString("hex");
+  if (!rows[0]) return { challengeId, expiresInSeconds: 300, debugCode: "123456", maskedDestination: "إذا كانت البيانات صحيحة ستصلك رسالة التحقق" };
+  await db.insert(passwordResetChallenges).values({ challengeId, userId: rows[0].id, channel, codeHash: hashOtp(challengeId, "123456"), expiresAt: new Date(Date.now() + 300_000), lastSentAt: new Date() });
+  const destination = channel === "email" ? rows[0].email ?? "بياناتك" : rows[0].phone ?? "رقم جوالك";
+  return { challengeId, expiresInSeconds: 300, debugCode: "123456", maskedDestination: channel === "email" ? destination.replace(/^(.{2}).*(@.*)$/, "$1••••$2") : `${destination.slice(0, 4)}••••${destination.slice(-2)}` };
+}
+
+export async function resetPassword(challengeId: string, code: string, newPassword: string) {
+  const db = await requireDatabase();
+  if (newPassword.length < 8 || !/[A-Za-z\u0600-\u06ff]/.test(newPassword) || !/\d/.test(newPassword)) throw new Error("كلمة المرور يجب أن تتكون من 8 أحرف وتحتوي حرفاً ورقماً");
+  const rows = await db.select().from(passwordResetChallenges).where(eq(passwordResetChallenges.challengeId, challengeId)).limit(1);
+  const challenge = rows[0];
+  if (!challenge || challenge.verifiedAt || challenge.expiresAt.getTime() < Date.now()) throw new Error("انتهت صلاحية رمز الاستعادة");
+  if (challenge.attempts >= 5) throw new Error("تم تجاوز عدد المحاولات. ابدأ الاستعادة من جديد");
+  if (hashOtp(challengeId, code) !== challenge.codeHash) {
+    await db.update(passwordResetChallenges).set({ attempts: challenge.attempts + 1 }).where(eq(passwordResetChallenges.id, challenge.id));
+    throw new Error("رمز التحقق غير صحيح");
+  }
+  await db.transaction(async (tx) => {
+    await tx.update(users).set({ passwordHash: await hashPassword(newPassword), loginMethod: "password", updatedAt: new Date() }).where(eq(users.id, challenge.userId));
+    await tx.delete(authSessions).where(eq(authSessions.userId, challenge.userId));
+    await tx.update(passwordResetChallenges).set({ verifiedAt: new Date() }).where(eq(passwordResetChallenges.id, challenge.id));
+    await tx.insert(notifications).values({ userId: challenge.userId, type: "password_changed", title: "تم تغيير كلمة المرور", message: "تم تغيير كلمة المرور وتسجيل الخروج من الجلسات القديمة." });
+  });
+  return { success: true };
+}
+
+export async function listNotifications(userId: number) {
+  const db = await requireDatabase();
+  return db.select().from(notifications).where(eq(notifications.userId, userId)).orderBy(desc(notifications.createdAt));
+}
+
+export async function markNotificationRead(userId: number, id: number) {
+  const db = await requireDatabase();
+  await db.update(notifications).set({ readAt: new Date() }).where(and(eq(notifications.id, id), eq(notifications.userId, userId)));
+  return { success: true };
 }
 
 export async function listVehicles(userId: number) {
@@ -273,5 +350,19 @@ export async function logoutAllOtherSessions(userId: number, currentTokenHash?: 
   const db = await requireDatabase();
   if (currentTokenHash) await db.delete(authSessions).where(and(eq(authSessions.userId, userId), eq(authSessions.tokenHash, currentTokenHash)));
   else await db.delete(authSessions).where(eq(authSessions.userId, userId));
+  return { success: true };
+}
+
+
+export async function changePassword(userId: number, currentPassword: string, newPassword: string) {
+  const db = await requireDatabase();
+  const row = (await db.select({ passwordHash: users.passwordHash }).from(users).where(eq(users.id, userId)).limit(1))[0];
+  if (!row || !(await verifyPassword(currentPassword, row.passwordHash))) throw new Error("كلمة المرور الحالية غير صحيحة");
+  if (newPassword.length < 8 || !/[A-Za-z\u0600-\u06ff]/.test(newPassword) || !/\d/.test(newPassword)) throw new Error("كلمة المرور يجب أن تتكون من 8 أحرف وتحتوي حرفاً ورقماً");
+  await db.transaction(async (tx) => {
+    await tx.update(users).set({ passwordHash: await hashPassword(newPassword), updatedAt: new Date() }).where(eq(users.id, userId));
+    await tx.delete(authSessions).where(eq(authSessions.userId, userId));
+    await tx.insert(notifications).values({ userId, type: "password_changed", title: "تم تغيير كلمة المرور", message: "تم تغيير كلمة المرور وتسجيل الخروج من الجلسات القديمة." });
+  });
   return { success: true };
 }

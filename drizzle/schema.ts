@@ -10,7 +10,7 @@ export const users = mysqlTable("users", {
   accountType: mysqlEnum("accountType", ["customer", "workshop"]).default("customer").notNull(),
   status: mysqlEnum("status", ["active", "pending", "suspended"]).default("active").notNull(),
   loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  role: mysqlEnum("role", ["user", "admin", "super_admin", "workshop_owner", "workshop_employee"]).default("user").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -85,6 +85,57 @@ export const authSessions = mysqlTable("auth_sessions", {
   userAgent: varchar("userAgent", { length: 255 }),
   ipAddress: varchar("ipAddress", { length: 80 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const passwordResetChallenges = mysqlTable("password_reset_challenges", {
+  id: int("id").autoincrement().primaryKey(),
+  challengeId: varchar("challengeId", { length: 80 }).notNull().unique(),
+  userId: int("userId").notNull(),
+  channel: mysqlEnum("channel", ["phone", "email"]).notNull(),
+  codeHash: varchar("codeHash", { length: 128 }).notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  lastSentAt: timestamp("lastSentAt").defaultNow().notNull(),
+  attempts: int("attempts").default(0).notNull(),
+  verifiedAt: timestamp("verifiedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const loginAttempts = mysqlTable("login_attempts", {
+  id: int("id").autoincrement().primaryKey(),
+  identifierHash: varchar("identifierHash", { length: 128 }).notNull(),
+  ipAddress: varchar("ipAddress", { length: 80 }),
+  success: boolean("success").default(false).notNull(),
+  reason: varchar("reason", { length: 80 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const userConsents = mysqlTable("user_consents", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  consentType: mysqlEnum("consentType", ["terms_privacy", "marketing"]).notNull(),
+  accepted: boolean("accepted").notNull(),
+  policyVersion: varchar("policyVersion", { length: 40 }).notNull(),
+  acceptedAt: timestamp("acceptedAt").defaultNow().notNull(),
+});
+
+export const notifications = mysqlTable("notifications", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  type: varchar("type", { length: 80 }).notNull(),
+  title: varchar("title", { length: 180 }).notNull(),
+  message: text("message").notNull(),
+  readAt: timestamp("readAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const workshopEmployees = mysqlTable("workshop_employees", {
+  id: int("id").autoincrement().primaryKey(),
+  workshopId: int("workshopId").notNull(),
+  userId: int("userId").notNull(),
+  permissions: text("permissions").notNull(),
+  status: mysqlEnum("status", ["invited", "active", "disabled"]).default("invited").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export const vehicles = mysqlTable("vehicles", {
@@ -173,6 +224,10 @@ export const shipmentEvents = mysqlTable("shipment_events", {
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
+export type PasswordResetChallenge = typeof passwordResetChallenges.$inferSelect;
+export type InsertPasswordResetChallenge = typeof passwordResetChallenges.$inferInsert;
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = typeof notifications.$inferInsert;
 export type Workshop = typeof workshops.$inferSelect;
 export type InsertWorkshop = typeof workshops.$inferInsert;
 export type RegistrationChallenge = typeof registrationChallenges.$inferSelect;
