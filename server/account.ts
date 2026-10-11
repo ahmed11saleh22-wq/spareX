@@ -334,16 +334,29 @@ export async function updateWorkshopApproval(id: number, approvalStatus: "approv
   const workshop = rows[0];
   if (!workshop) throw new Error("طلب الورشة غير موجود");
   await db.transaction(async (tx) => {
-    await tx.update(workshops).set({ approvalStatus, rejectionReason: details.rejectionReason ?? null, changeFields: details.changeFields ? JSON.stringify(details.changeFields) : null, reapplyAllowed: details.reapplyAllowed ?? false, internalNotes: details.internalNotes ?? null, approvedBy: approvalStatus === "approved" ? actorUserId ?? null : null, approvedAt: approvalStatus === "approved" ? new Date() : null, updatedAt: new Date() }).where(eq(workshops.id, id));
+    await tx.update(workshops).set({ approvalStatus, rejectionReason: details.rejectionReason ?? null, changeFields: details.changeFields ? JSON.stringify(details.changeFields) : null, reapplyAllowed: details.reapplyAllowed ?? false, internalNotes: details.internalNotes ?? null, approvedBy: approvalStatus === "approved" ? actorUserId ?? null : null, approvedAt: approvalStatus === "approved" ? new Date() : null, ...(approvalStatus === "approved" ? {} : { workshopLevel: null, discountPercent: null, priceListId: null, minOrderAmount: null, creditAllowed: false, creditLimit: 0, paymentTermDays: 0 }), updatedAt: new Date() }).where(eq(workshops.id, id));
     await tx.update(users).set({ status: approvalStatus === "suspended" ? "suspended" : "active", updatedAt: new Date() }).where(eq(users.id, workshop.userId));
     await tx.insert(auditLogs).values({ actorUserId: actorUserId ?? null, action: `workshop_${approvalStatus}`, entityType: "workshop", entityId: id, oldValues: JSON.stringify({ userId: workshop.userId }), newValues: JSON.stringify({ approvalStatus, rejectionReason: details.rejectionReason ?? null }) });
   });
   return { success: true };
 }
 
-export async function updateWorkshopPricing(id: number, input: { workshopLevel?: "Bronze" | "Silver" | "Gold" | "Platinum"; discountPercent?: number; priceListId?: string; minOrderAmount?: number; creditLimit?: number; paymentTermDays?: number; creditAllowed?: boolean }) {
+export async function updateWorkshopPricing(id: number, input: { workshopLevel?: "Bronze" | "Silver" | "Gold" | "Platinum"; discountPercent?: number; priceListId?: string; minOrderAmount?: number; creditLimit?: number; paymentTermDays?: number; creditAllowed?: boolean }, actorUserId?: number) {
   const db = await requireDatabase();
-  await db.update(workshops).set({ ...input, updatedAt: new Date() }).where(eq(workshops.id, id));
+  const current = (await db.select().from(workshops).where(eq(workshops.id, id)).limit(1))[0];
+  if (!current) throw new Error("الورشة غير موجودة");
+  if (current.approvalStatus !== "approved") throw new Error("لا يمكن إعداد أسعار أو ائتمان قبل اعتماد الورشة يدوياً");
+  const effectiveCredit = input.creditAllowed ?? current.creditAllowed;
+  const effectiveLimit = input.creditLimit ?? current.creditLimit ?? 0;
+  const effectiveTerms = input.paymentTermDays ?? current.paymentTermDays ?? 0;
+  if (effectiveCredit && (effectiveLimit <= 0 || effectiveTerms <= 0)) throw new Error("لتفعيل الشراء الآجل حدّد الحد الائتماني ومدة السداد أولاً");
+  const effectiveLevel = input.workshopLevel ?? current.workshopLevel;
+  const effectivePriceList = input.priceListId ?? current.priceListId;
+  if ((input.discountPercent !== undefined || input.minOrderAmount !== undefined || input.creditAllowed !== undefined) && !effectiveLevel && !effectivePriceList) throw new Error("حدّد مستوى الورشة أو قائمة الأسعار قبل إضافة أي شروط تجارية");
+  await db.transaction(async (tx) => {
+    await tx.update(workshops).set({ ...input, creditAllowed: effectiveCredit, creditLimit: effectiveCredit ? effectiveLimit : 0, paymentTermDays: effectiveCredit ? effectiveTerms : 0, updatedAt: new Date() }).where(eq(workshops.id, id));
+    await tx.insert(auditLogs).values({ actorUserId: actorUserId ?? null, action: "workshop_pricing_updated", entityType: "workshop", entityId: id, oldValues: JSON.stringify({ workshopLevel: current.workshopLevel, discountPercent: current.discountPercent, creditAllowed: current.creditAllowed, creditLimit: current.creditLimit, paymentTermDays: current.paymentTermDays }), newValues: JSON.stringify(input) });
+  });
   return { success: true };
 }
 
@@ -378,7 +391,8 @@ async function ownedWorkshop(userId: number, workshopId?: number) {
 
 export async function getWorkshopStatus(userId: number) {
   const { workshop } = await ownedWorkshop(userId);
-  return { id: workshop.id, approvalStatus: workshop.approvalStatus, rejectionReason: workshop.rejectionReason, changeFields: workshop.changeFields, reapplyAllowed: workshop.reapplyAllowed, workshopName: workshop.workshopName };
+  const approved = workshop.approvalStatus === "approved";
+  return { id: workshop.id, approvalStatus: workshop.approvalStatus, rejectionReason: workshop.rejectionReason, changeFields: workshop.changeFields, reapplyAllowed: workshop.reapplyAllowed, workshopName: workshop.workshopName, workshopLevel: approved ? workshop.workshopLevel : null, priceListId: approved ? workshop.priceListId : null, discountPercent: approved ? workshop.discountPercent : null, creditAllowed: approved ? workshop.creditAllowed : false, creditLimit: approved && workshop.creditAllowed ? workshop.creditLimit : 0, paymentTermDays: approved && workshop.creditAllowed ? workshop.paymentTermDays : 0 };
 }
 
 export async function listWorkshopDocuments(userId: number, workshopId: number) {
