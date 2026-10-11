@@ -26,6 +26,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import ShipmentEditor from "@/components/ShipmentEditor";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 type AdminProduct = { id: number; name: string; sku: string; category: string; price: number; stock: number; status: "نشط" | "مسودة"; brand: string };
 type Order = { id: string; customer: string; items: number; total: number; date: string; status: "جديد" | "قيد التجهيز" | "تم الشحن" | "مكتمل" | "ملغى" };
@@ -44,11 +45,13 @@ export default function Admin() {
   const [tab, setTab] = useState<"overview" | "products" | "orders" | "workshops">("overview");
   const [editingProduct, setEditingProduct] = useState<AdminProduct | null>(null);
   const [shipmentOrder, setShipmentOrder] = useState<string | null>(null);
+  const { user: authUser, loading: authLoading } = useAuth();
+  const isAdmin = authUser?.role === "admin" || authUser?.role === "super_admin";
   const utils = trpc.useUtils();
-  const { data: products = [] } = trpc.admin.listProducts.useQuery();
-  const { data: orders = [] } = trpc.admin.listOrders.useQuery();
-  const { data: overview = { salesTotal: 0, orderCount: 0, productCount: 0, lowStockCount: 0 } } = trpc.admin.overview.useQuery();
-  const { data: workshops = [] } = trpc.admin.listWorkshopApplications.useQuery();
+  const { data: products = [] } = trpc.admin.listProducts.useQuery(undefined, { enabled: isAdmin });
+  const { data: orders = [] } = trpc.admin.listOrders.useQuery(undefined, { enabled: isAdmin });
+  const { data: overview = { salesTotal: 0, orderCount: 0, productCount: 0, lowStockCount: 0 } } = trpc.admin.overview.useQuery(undefined, { enabled: isAdmin });
+  const { data: workshops = [] } = trpc.admin.listWorkshopApplications.useQuery(undefined, { enabled: isAdmin });
   const createProductMutation = trpc.admin.createProduct.useMutation({ onSuccess: () => { setAddOpen(false); setEditingProduct(null); void utils.admin.listProducts.invalidate(); void utils.admin.overview.invalidate(); } });
   const updateProductMutation = trpc.admin.updateProduct.useMutation({ onSuccess: () => { setAddOpen(false); setEditingProduct(null); void utils.admin.listProducts.invalidate(); void utils.admin.overview.invalidate(); } });
   const archiveProductMutation = trpc.admin.archiveProduct.useMutation({ onSuccess: () => { void utils.admin.listProducts.invalidate(); void utils.admin.overview.invalidate(); } });
@@ -79,6 +82,9 @@ export default function Admin() {
   };
 
   const visibleWorkshops = workshops.filter((item) => { const haystack = `${item.workshop.workshopName} ${item.user.phone || ""} ${item.workshop.country || ""} ${item.workshop.city}`.toLowerCase(); return haystack.includes(workshopSearch.toLowerCase()) && (workshopStatus === "all" || item.workshop.approvalStatus === workshopStatus); });
+
+  if (authLoading) return <div className="flex min-h-screen items-center justify-center bg-[#f6f8fb] text-sm font-bold text-slate-500" dir="rtl">جارٍ التحقق من صلاحيات الإدارة…</div>;
+  if (!isAdmin) return <div className="flex min-h-screen items-center justify-center bg-[#f6f8fb] p-6 text-center" dir="rtl"><div className="rounded-3xl bg-white p-8 shadow-sm"><h1 className="text-xl font-black text-[#0b1f33]">لا تملك صلاحية الدخول</h1><p className="mt-2 text-sm text-slate-500">هذه الصفحة مخصصة للمديرين فقط.</p><a className="mt-5 inline-block rounded-xl bg-[#f97316] px-5 py-3 text-sm font-black text-white" href="/">العودة إلى المتجر</a></div></div>;
 
   return <div className="min-h-screen bg-[#f6f8fb] text-[#0b1f33]" dir="rtl">
     <aside className="fixed inset-y-0 right-0 z-30 hidden w-64 border-l border-slate-200 bg-[#0b1f33] p-5 text-white lg:block"><a href="/" className="flex flex-col border-b border-white/10 pb-6 leading-none" aria-label="سبير X الرئيسية"><span className="text-2xl font-black">سـبـيـر <b className="text-[#f97316]">X</b></span><small className="mt-2 text-[10px] font-medium tracking-wide text-slate-300">قطع غيار السيارات</small></a><div className="mt-8"><p className="px-3 text-[10px] font-bold uppercase tracking-[.2em] text-slate-400">الإدارة</p><nav className="mt-3 space-y-1">{navItems.map(({ key, label, icon: Icon }) => <button key={key as string} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-bold transition ${tab === key ? "bg-[#f97316] text-white" : "text-slate-300 hover:bg-white/10 hover:text-white"}`} onClick={() => setTab(key)}><Icon size={18} />{label}</button>)}</nav></div><div className="absolute bottom-6 right-5 left-5 rounded-2xl bg-white/10 p-4"><p className="text-xs font-bold text-orange-200">مركز العمليات</p><p className="mt-2 text-xs leading-5 text-slate-300">تأكد من تحديث حالة المخزون قبل اعتماد الطلبات.</p><a href="/" className="mt-3 flex items-center gap-1 text-xs font-bold text-white">العودة للمتجر <ArrowRight size={14} /></a></div></aside>
