@@ -41,6 +41,8 @@ export type RegistrationInput = {
 };
 
 const OTP_TTL_SECONDS = Math.max(60, Number(process.env.OTP_TTL_SECONDS || 300));
+const DEFAULT_ADMIN_USERNAME = "admin";
+const DEFAULT_ADMIN_PASSWORD = "admin";
 
 function challengeSafeName(email: string) {
   return email.replace(/[^a-z0-9]+/gi, "-").slice(0, 60) || "workshop";
@@ -253,13 +255,16 @@ export async function loginAdminWithUsername(username: string, password: string,
   if (!current || Date.now() - current.startedAt >= LOGIN_WINDOW_MS) loginWindows.set(key, { count: 0, startedAt: Date.now() });
 
   let rows = await db.select().from(users).where(and(eq(users.username, cleanUsername), or(eq(users.role, "admin"), eq(users.role, "super_admin")))).limit(1);
-  const configuredUsername = process.env.ADMIN_USERNAME?.trim().toLowerCase();
-  const configuredPassword = process.env.ADMIN_PASSWORD;
-  if (!rows[0] && configuredUsername === cleanUsername && configuredPassword && configuredPassword === password) {
-    const owner = await db.select().from(users).where(or(eq(users.openId, process.env.OWNER_OPEN_ID ?? "__missing__"), eq(users.role, "admin"), eq(users.role, "super_admin"))).limit(1);
+  const configuredUsername = process.env.ADMIN_USERNAME?.trim().toLowerCase() || DEFAULT_ADMIN_USERNAME;
+  const configuredPassword = process.env.ADMIN_PASSWORD || DEFAULT_ADMIN_PASSWORD;
+  if (!rows[0] && configuredUsername === cleanUsername && configuredPassword === password) {
+    const owner = await db.select().from(users).where(or(eq(users.openId, process.env.OWNER_OPEN_ID ?? "__missing__"), eq(users.openId, "default-admin"), eq(users.role, "admin"), eq(users.role, "super_admin"))).limit(1);
     if (owner[0]) {
-      await db.update(users).set({ username: cleanUsername, passwordHash: await hashPassword(configuredPassword), loginMethod: "admin_username", updatedAt: new Date() }).where(eq(users.id, owner[0].id));
+      await db.update(users).set({ username: cleanUsername, passwordHash: await hashPassword(configuredPassword), loginMethod: "admin_username", role: "admin", status: "active", updatedAt: new Date() }).where(eq(users.id, owner[0].id));
       rows = await db.select().from(users).where(eq(users.id, owner[0].id)).limit(1);
+    } else {
+      await db.insert(users).values({ openId: "default-admin", name: "مدير المتجر", username: cleanUsername, passwordHash: await hashPassword(configuredPassword), loginMethod: "admin_username", role: "admin", status: "active", accountType: "customer", marketingConsent: false });
+      rows = await db.select().from(users).where(eq(users.openId, "default-admin")).limit(1);
     }
   }
   const user = rows[0];

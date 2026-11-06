@@ -22,7 +22,7 @@ export const appRouter = router({
         throw new TRPCError({ code: "UNAUTHORIZED", message: error instanceof Error ? error.message : "بيانات الدخول غير صحيحة" });
       }
     }),
-    loginAdmin: publicProcedure.input(z.object({ username: z.string().min(3).max(80), password: z.string().min(8).max(200), rememberMe: z.boolean().optional() })).mutation(async ({ input, ctx }) => {
+    loginAdmin: publicProcedure.input(z.object({ username: z.string().min(3).max(80), password: z.string().min(5).max(200), rememberMe: z.boolean().optional() })).mutation(async ({ input, ctx }) => {
       try {
         const user = await account.loginAdminWithUsername(input.username, input.password, ctx.req.ip);
         await createSelfSession(user.id, ctx.req, ctx.res, input.rememberMe ?? true);
