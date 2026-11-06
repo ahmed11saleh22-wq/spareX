@@ -2,7 +2,8 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { and, desc, eq, or } from "drizzle-orm";
 import { auditLogs, authSessions, loginAttempts, notifications, passwordResetChallenges, registrationChallenges, userConsents, users, vehicles, workshops, workshopDocuments, walletTransactions } from "../drizzle/schema";
 import { getDb } from "./db";
-import { hashOtp, hashPassword, normalizePhone, safeUser, verifyPassword } from "./self-auth";
+import { getDevelopmentAdminUser, hashOtp, hashPassword, normalizePhone, safeUser, verifyPassword } from "./self-auth";
+import { ENV } from "./_core/env";
 import { storagePut } from "./storage";
 
 export type RegistrationInput = {
@@ -246,8 +247,11 @@ export async function loginWithPassword(identifier: string, password: string, ip
 }
 
 export async function loginAdminWithUsername(username: string, password: string, ipAddress?: string) {
-  const db = await requireDatabase();
   const cleanUsername = username.trim().toLowerCase();
+  const configuredUsername = process.env.ADMIN_USERNAME?.trim().toLowerCase() || DEFAULT_ADMIN_USERNAME;
+  const configuredPassword = process.env.ADMIN_PASSWORD || DEFAULT_ADMIN_PASSWORD;
+  if (ENV.isDbLessDevelopment && cleanUsername === configuredUsername && password === configuredPassword) return safeUser(getDevelopmentAdminUser());
+  const db = await requireDatabase();
   if (!/^[a-z0-9][a-z0-9._-]{2,79}$/.test(cleanUsername)) throw new Error("اسم المستخدم غير صحيح");
   const key = identifierKey(`admin:${cleanUsername}`);
   const current = loginWindows.get(key);
@@ -255,8 +259,6 @@ export async function loginAdminWithUsername(username: string, password: string,
   if (!current || Date.now() - current.startedAt >= LOGIN_WINDOW_MS) loginWindows.set(key, { count: 0, startedAt: Date.now() });
 
   let rows = await db.select().from(users).where(and(eq(users.username, cleanUsername), or(eq(users.role, "admin"), eq(users.role, "super_admin")))).limit(1);
-  const configuredUsername = process.env.ADMIN_USERNAME?.trim().toLowerCase() || DEFAULT_ADMIN_USERNAME;
-  const configuredPassword = process.env.ADMIN_PASSWORD || DEFAULT_ADMIN_PASSWORD;
   if (!rows[0] && configuredUsername === cleanUsername && configuredPassword === password) {
     const owner = await db.select().from(users).where(or(eq(users.openId, process.env.OWNER_OPEN_ID ?? "__missing__"), eq(users.openId, "default-admin"), eq(users.role, "admin"), eq(users.role, "super_admin"))).limit(1);
     if (owner[0]) {
@@ -361,6 +363,7 @@ export async function setPrimaryVehicle(userId: number, id: number) {
 }
 
 export async function listWorkshopApplications() {
+  if (ENV.isDbLessDevelopment) return [];
   const db = await requireDatabase();
   return db.select({ workshop: workshops, user: users }).from(workshops).innerJoin(users, eq(workshops.userId, users.id)).orderBy(desc(workshops.createdAt));
 }

@@ -9,6 +9,7 @@ export const ENV = {
   get adminUsername() { return process.env.ADMIN_USERNAME ?? ""; },
   get adminPassword() { return process.env.ADMIN_PASSWORD ?? ""; },
   get isProduction() { return process.env.NODE_ENV === "production"; },
+  get isDbLessDevelopment() { return process.env.NODE_ENV === "development" && !process.env.DATABASE_URL; },
   get forgeApiUrl() { return process.env.MANUS_API_URL ?? ""; },
   get forgeApiKey() { return process.env.MANUS_API_KEY ?? ""; },
 };

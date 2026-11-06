@@ -9,12 +9,17 @@ import { ENV } from "./_core/env";
 
 const scryptAsync = promisify(scrypt);
 export const SELF_SESSION_COOKIE = "sparex_session";
+export const DEV_ADMIN_COOKIE = "sparex_dev_admin";
 export const SELF_SESSION_DAYS = 30;
 
 function readCookie(request: Request, name: string) {
   const raw = request.headers.cookie ?? "";
   const match = raw.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
   return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
+
+export function getDevelopmentAdminUser(): User {
+  return { id: 0, openId: "development-admin", name: "مدير المتجر", username: "admin", phone: null, phoneCountryCode: null, phoneVerifiedAt: null, email: null, emailVerifiedAt: null, passwordHash: null, marketingConsent: false, accountType: "customer", status: "active", loginMethod: "admin_username", role: "admin", createdAt: new Date(0), updatedAt: new Date(), lastSignedIn: new Date() };
 }
 
 export function normalizePhone(phone: string) {
@@ -55,6 +60,10 @@ export function safeUser(user: User) {
 
 export async function createSelfSession(userId: number, request: Request, response: Response, rememberMe = true) {
   const db = await getDb();
+  if (!db && ENV.isDbLessDevelopment && userId === 0) {
+    response.cookie(DEV_ADMIN_COOKIE, "1", { ...getSessionCookieOptions(request), maxAge: SELF_SESSION_DAYS * 24 * 60 * 60 * 1000 });
+    return "development-admin";
+  }
   if (!db) throw new Error("Database is not available");
   const token = randomBytes(32).toString("base64url");
   const now = new Date();
@@ -73,6 +82,7 @@ export async function createSelfSession(userId: number, request: Request, respon
 
 export async function authenticateSelfSession(request: Request) {
   const token = readCookie(request, SELF_SESSION_COOKIE);
+  if (ENV.isDbLessDevelopment && readCookie(request, DEV_ADMIN_COOKIE) === "1") return getDevelopmentAdminUser();
   if (!token) return null;
   const db = await getDb();
   if (!db) return null;
@@ -89,6 +99,7 @@ export async function authenticateSelfSession(request: Request) {
 
 export async function clearSelfSession(request: Request, response: Response) {
   const token = readCookie(request, SELF_SESSION_COOKIE);
+  if (ENV.isDbLessDevelopment) response.clearCookie(DEV_ADMIN_COOKIE, { ...getSessionCookieOptions(request), maxAge: -1 });
   const db = await getDb();
   if (db && token) await db.delete(authSessions).where(eq(authSessions.tokenHash, hashSessionToken(token)));
   response.clearCookie(SELF_SESSION_COOKIE, { ...getSessionCookieOptions(request), maxAge: -1 });

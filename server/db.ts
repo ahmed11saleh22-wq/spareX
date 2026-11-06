@@ -64,6 +64,7 @@ export async function listCatalogCategories() {
 }
 
 export async function listAdminProducts() {
+  if (ENV.isDbLessDevelopment) return [];
   const db = await requireDb();
   const rows = await db.select().from(products).where(sql`${products.status} <> 'archived'`).orderBy(desc(products.createdAt));
   return rows.map((product) => ({
@@ -100,6 +101,7 @@ export async function updateProduct(id: number, input: { name: string; brand: st
 const orderStatusToArabic = { new: "جديد", processing: "قيد التجهيز", shipped: "تم الشحن", completed: "مكتمل", cancelled: "ملغى" } as const;
 
 export async function listAdminOrders() {
+  if (ENV.isDbLessDevelopment) return [];
   const db = await requireDb();
   const rows = await db.select({ order: orders, itemCount: sql<number>`coalesce((select sum(${orderItems.quantity}) from ${orderItems} where ${orderItems.orderId} = ${orders.id}), 0)` }).from(orders).orderBy(desc(orders.createdAt));
   return rows.map((order) => ({
@@ -181,6 +183,7 @@ export async function processMoyasarWebhook(event: { id?: string; type?: string;
 }
 
 export async function getAdminOverview() {
+  if (ENV.isDbLessDevelopment) return { salesTotal: 0, orderCount: 0, productCount: 0, lowStockCount: 0 };
   const db = await requireDb();
   const [sales, orderCount, productCount, lowStock] = await Promise.all([
     db.select({ value: sql<number>`coalesce(sum(${orders.total}), 0)` }).from(orders).where(sql`${orders.status} <> 'cancelled'`),
