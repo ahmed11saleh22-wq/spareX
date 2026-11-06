@@ -243,6 +243,38 @@ export async function loginWithPassword(identifier: string, password: string, ip
   return safeUser({ ...user, lastSignedIn: new Date() });
 }
 
+export async function loginAdminWithUsername(username: string, password: string, ipAddress?: string) {
+  const db = await requireDatabase();
+  const cleanUsername = username.trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9._-]{2,79}$/.test(cleanUsername)) throw new Error("اسم المستخدم غير صحيح");
+  const key = identifierKey(`admin:${cleanUsername}`);
+  const current = loginWindows.get(key);
+  if (current && Date.now() - current.startedAt < LOGIN_WINDOW_MS && current.count >= MAX_LOGIN_ATTEMPTS) throw new Error("محاولات الدخول كثيرة. حاول بعد قليل");
+  if (!current || Date.now() - current.startedAt >= LOGIN_WINDOW_MS) loginWindows.set(key, { count: 0, startedAt: Date.now() });
+
+  let rows = await db.select().from(users).where(and(eq(users.username, cleanUsername), or(eq(users.role, "admin"), eq(users.role, "super_admin")))).limit(1);
+  const configuredUsername = process.env.ADMIN_USERNAME?.trim().toLowerCase();
+  const configuredPassword = process.env.ADMIN_PASSWORD;
+  if (!rows[0] && configuredUsername === cleanUsername && configuredPassword && configuredPassword === password) {
+    const owner = await db.select().from(users).where(or(eq(users.openId, process.env.OWNER_OPEN_ID ?? "__missing__"), eq(users.role, "admin"), eq(users.role, "super_admin"))).limit(1);
+    if (owner[0]) {
+      await db.update(users).set({ username: cleanUsername, passwordHash: await hashPassword(configuredPassword), loginMethod: "admin_username", updatedAt: new Date() }).where(eq(users.id, owner[0].id));
+      rows = await db.select().from(users).where(eq(users.id, owner[0].id)).limit(1);
+    }
+  }
+  const user = rows[0];
+  if (!user || !["admin", "super_admin"].includes(user.role) || !(await verifyPassword(password, user.passwordHash))) {
+    const window = loginWindows.get(key)!; window.count += 1;
+    await recordLoginAttempt(db, `admin:${cleanUsername}`, false, ipAddress, "invalid_admin_credentials");
+    throw new Error("اسم المستخدم أو كلمة المرور غير صحيحة");
+  }
+  if (user.status === "suspended") throw new Error("حساب المدير موقوف");
+  loginWindows.delete(key);
+  await recordLoginAttempt(db, `admin:${cleanUsername}`, true, ipAddress, "admin_username_success");
+  await db.update(users).set({ loginMethod: "admin_username", lastSignedIn: new Date() }).where(eq(users.id, user.id));
+  return safeUser({ ...user, loginMethod: "admin_username", lastSignedIn: new Date() });
+}
+
 export async function startPasswordReset(identifier: string) {
   const db = await requireDatabase();
   const normalized = identifier.includes("@") ? identifier.trim().toLowerCase() : normalizePhone(identifier);

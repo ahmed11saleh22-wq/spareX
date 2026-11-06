@@ -23,7 +23,7 @@ export const adminProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
     const isOwner = Boolean(ENV.ownerOpenId) && ctx.user?.openId === ENV.ownerOpenId;
-    if (!ctx.user || (!["admin", "super_admin"].includes(ctx.user.role) && !isOwner)) {
+    if (!ctx.user || ctx.user.loginMethod !== "admin_username" || (!['admin', 'super_admin'].includes(ctx.user.role) && !isOwner)) {
       throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
     }
     return next({ ctx: { ...ctx, user: ctx.user } });
@@ -34,7 +34,7 @@ export const superAdminProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
     const isOwner = Boolean(ENV.ownerOpenId) && ctx.user?.openId === ENV.ownerOpenId;
-    if (!ctx.user || (ctx.user.role !== "super_admin" && !isOwner)) throw new TRPCError({ code: "FORBIDDEN", message: "لا تملك صلاحية المدير الأعلى" });
+    if (!ctx.user || ctx.user.loginMethod !== "admin_username" || (ctx.user.role !== "super_admin" && !isOwner)) throw new TRPCError({ code: "FORBIDDEN", message: "لا تملك صلاحية المدير الأعلى" });
     return next({ ctx: { ...ctx, user: ctx.user } });
   }),
 );

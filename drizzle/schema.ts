@@ -4,6 +4,7 @@ export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
+  username: varchar("username", { length: 80 }),
   phone: varchar("phone", { length: 40 }),
   phoneCountryCode: varchar("phoneCountryCode", { length: 8 }),
   phoneVerifiedAt: timestamp("phoneVerifiedAt"),
@@ -18,7 +19,7 @@ export const users = mysqlTable("users", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
-}, (table) => ({ emailUnique: uniqueIndex("users_email_unique").on(table.email), phoneUnique: uniqueIndex("users_phone_unique").on(table.phone) }));
+}, (table) => ({ emailUnique: uniqueIndex("users_email_unique").on(table.email), phoneUnique: uniqueIndex("users_phone_unique").on(table.phone), usernameUnique: uniqueIndex("users_username_unique").on(table.username) }));
 
 export const workshops = mysqlTable("workshops", {
   id: int("id").autoincrement().primaryKey(),
